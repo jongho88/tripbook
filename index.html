@@ -481,32 +481,6 @@ async function addPhotos(files,extra){
 }
 const photos=()=>all('media').sort((a,b)=>(a.day??99)-(b.day??99)||(a.created||0)-(b.created||0));
 
-/* 캐리커처: 기기 안에서만 처리 */
-async function caricature(file,color){
-  const img=await loadImg(await fileURL(file));
-  const S=440,R=S/2;const side=Math.min(img.naturalWidth,img.naturalHeight),sx=(img.naturalWidth-side)/2,sy=(img.naturalHeight-side)/2*0.7;
-  const t=document.createElement('canvas');t.width=t.height=S;const tc=t.getContext('2d');
-  tc.filter='saturate(1.6) contrast(1.12) brightness(1.04)';tc.drawImage(img,sx,sy,side,side,0,0,S,S);
-  const src=tc.getImageData(0,0,S,S).data;const out=tc.createImageData(S,S),o=out.data;const g=new Float32Array(S*S);const st=255/4;
-  for(let y=0;y<S;y++)for(let x=0;x<S;x++){
-    const dx=(x-R)/R,dy=(y-R*0.92)/R,r=Math.hypot(dx,dy);const k=r>0&&r<1?Math.pow(r,1.4)/r:1;
-    const ux=Math.min(S-1,Math.max(0,Math.round(R+dx*k*R))),uy=Math.min(S-1,Math.max(0,Math.round(R*0.92+dy*k*R)));
-    const si=(uy*S+ux)*4,di=(y*S+x)*4;
-    o[di]=Math.round(src[si]/st)*st;o[di+1]=Math.round(src[si+1]/st)*st;o[di+2]=Math.round(src[si+2]/st)*st;o[di+3]=255;
-    g[y*S+x]=src[si]*.3+src[si+1]*.59+src[si+2]*.11;
-  }
-  for(let y=1;y<S-1;y++)for(let x=1;x<S-1;x++){
-    const p=(i,j)=>g[(y+j)*S+x+i];
-    const gx=-p(-1,-1)-2*p(-1,0)-p(-1,1)+p(1,-1)+2*p(1,0)+p(1,1),gy=-p(-1,-1)-2*p(0,-1)-p(1,-1)+p(-1,1)+2*p(0,1)+p(1,1);
-    const m=Math.hypot(gx,gy);if(m>90){const di=(y*S+x)*4,a=1-Math.min(1,(m-90)/110)*.88;o[di]*=a;o[di+1]*=a;o[di+2]*=a}
-  }
-  tc.putImageData(out,0,0);
-  const f=document.createElement('canvas');f.width=f.height=S;const fc=f.getContext('2d');
-  fc.fillStyle=color;fc.fillRect(0,0,S,S);
-  fc.save();fc.beginPath();fc.arc(R,R,R-16,0,Math.PI*2);fc.clip();fc.drawImage(t,0,0);fc.restore();
-  return new Promise(res=>f.toBlob(b=>res(b),'image/jpeg',.9));
-}
-
 /* ---------------------------------------------------------------
    공통 조각
    --------------------------------------------------------------- */
@@ -799,7 +773,7 @@ function rCover(v){
 /* ---- 1 사람들 ---- */
 function rPeople(v){
   const ms=members();
-  v.innerHTML=chapHead('people','사진을 올리면 이 기기 안에서 캐리커처 풍으로 바꿔 줍니다. 원본 사진은 저장하지 않아요.')+`
+  v.innerHTML=chapHead('people','함께 가는 사람들입니다. 각자 얼굴 사진을 올리고, 맡은 역할과 이번 여행에서 기대하는 것을 한 줄씩 적어 주세요.')+`
     <div class="row"><input class="in grow" id="pName" placeholder="이름 또는 별명" aria-label="새 참가자 이름"><button class="btn" id="pAdd">참가자 추가</button></div>
     <div class="people" style="margin-top:8px">${ms.map(m=>`<div class="person">${face(m,76)}<div>
       <div class="nm" style="color:${mcol(m)}">${esc(m.name)}</div><div class="rl">${esc(m.role||'역할 미정')}</div>
@@ -811,28 +785,48 @@ function rPeople(v){
   $$('[data-ed]',v).forEach(b=>b.onclick=()=>editPerson(b.dataset.ed));
 }
 function editPerson(id){
-  const m=member(id);let color=mcol(m),blob=null,file=null;
+  const m=member(id);let color=mcol(m),img=null,crop=null,changed=false;
   openSheet(`<h2>${esc(m.name)}</h2>
-    <label class="lab">캐리커처</label>
-    <div class="caric"><canvas id="cv" width="440" height="440"></canvas><div><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="cvF"></label><p class="small muted" style="margin-top:8px;max-width:16em">얼굴이 가운데 오는 사진이 잘 나와요.</p></div></div>
+    <label class="lab">얼굴 사진</label>
+    <div class="caric"><canvas id="cv" width="440" height="440" style="touch-action:none;cursor:grab" aria-label="얼굴 사진 미리 보기"></canvas>
+      <div style="flex:1;min-width:150px"><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="cvF"></label>
+      <div id="zoomBox" style="display:none;margin-top:12px"><label class="lab" for="cvZ" style="margin-top:0">크기</label><input type="range" id="cvZ" min="0" max="100" value="35" style="width:100%;accent-color:var(--cobalt)">
+      <p class="small muted" style="margin-top:4px">사진을 손가락이나 마우스로 끌어서 얼굴을 동그라미 가운데에 맞춰 주세요.</p></div></div></div>
     <label class="lab">내 색</label><div class="row" id="cols">${COLORS.map(c=>`<button aria-label="색 ${c}" data-c="${c}" style="width:32px;height:32px;border-radius:50%;background:${c};box-shadow:${c===color?'0 0 0 3px #fff,0 0 0 5px '+c:'none'}"></button>`).join('')}</div>
     <label class="lab" for="eN">이름</label><input class="in" id="eN" value="${esc(m.name)}">
     <label class="lab" for="eR">역할</label><input class="in" id="eR" value="${esc(m.role||'')}" placeholder="예: 총무, 운전, 사진, 맛집 담당">
     <label class="lab" for="eH">이번 여행에서 기대하는 것</label><textarea class="ta" id="eH" style="min-height:70px">${esc(m.hope||'')}</textarea>
     <div class="sp"></div><div class="row"><button class="btn grow" id="eSave">저장</button><button class="btn quiet" id="eNo">닫기</button></div>
-    <div style="margin-top:18px"><button class="btn danger sm" id="eDel">참가자에서 빼기</button></div>`);
-  const cv=$('#cv'),cx=cv.getContext('2d');
-  const paint=src=>loadImg(src).then(i=>{cx.clearRect(0,0,440,440);cx.drawImage(i,0,0,440,440)}).catch(()=>{});
-  if(m.avatar)paint(mediaUrl(m.avatar));else{cx.fillStyle=color;cx.beginPath();cx.arc(220,220,220,0,7);cx.fill();cx.fillStyle='#fff';cx.font='800 170px sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(m.name[0],220,232)}
-  const redo=async()=>{if(!file)return;blob=await caricature(file,color);paint(URL.createObjectURL(blob))};
-  $('#cvF').onchange=async e=>{file=e.target.files[0];if(file){toast('캐리커처 만드는 중…');await redo()}};
-  $$('#cols button').forEach(b=>b.onclick=()=>{color=b.dataset.c;$$('#cols button').forEach(x=>x.style.boxShadow=x===b?`0 0 0 3px #fff,0 0 0 5px ${x.dataset.c}`:'none');redo()});
+    <div style="margin-top:18px" class="row"><button class="btn danger sm" id="eDel">참가자에서 빼기</button>${m.avatar?'<button class="btn quiet sm" id="eNoPic">사진 빼기</button>':''}</div>`);
+  const cv=$('#cv'),cx=cv.getContext('2d'),S=440;
+  const ring=()=>{cx.save();cx.globalCompositeOperation='destination-in';cx.beginPath();cx.arc(S/2,S/2,S/2,0,7);cx.fill();cx.restore();cx.lineWidth=14;cx.strokeStyle=color;cx.beginPath();cx.arc(S/2,S/2,S/2-7,0,7);cx.stroke()};
+  const draw=()=>{
+    cx.clearRect(0,0,S,S);
+    if(img&&crop){cx.drawImage(img,crop.x-crop.side/2,crop.y-crop.side/2,crop.side,crop.side,0,0,S,S);ring();return}
+    if(m.avatar&&!changed){loadImg(mediaUrl(m.avatar)).then(i=>{if(img)return;cx.clearRect(0,0,S,S);cx.drawImage(i,0,0,S,S);ring()}).catch(()=>{});return}
+    cx.fillStyle=color;cx.beginPath();cx.arc(S/2,S/2,S/2,0,7);cx.fill();cx.fillStyle='#fff';cx.font='800 170px sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(m.name[0],S/2,S/2+12);
+  };
+  draw();
+  const W=()=>img.naturalWidth,H=()=>img.naturalHeight;
+  const clamp=()=>{const mx=Math.min(W(),H());crop.side=Math.max(mx*.2,Math.min(mx,crop.side));crop.x=Math.min(W()-crop.side/2,Math.max(crop.side/2,crop.x));crop.y=Math.min(H()-crop.side/2,Math.max(crop.side/2,crop.y))};
+  const zoomToSide=z=>Math.min(W(),H())*(1-z/100*.8);
+  $('#cvF').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+    try{img=await loadImg(await fileURL(f))}catch(err){toast(err.message);return}
+    changed=true;const z=Number($('#cvZ').value);crop={x:W()/2,y:H()*.45,side:zoomToSide(z)};clamp();$('#zoomBox').style.display='';draw()};
+  $('#cvZ').oninput=e=>{if(!crop)return;crop.side=zoomToSide(Number(e.target.value));clamp();draw()};
+  let drag=null;
+  cv.onpointerdown=e=>{if(!crop)return;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';drag={x:e.clientX,y:e.clientY,cx:crop.x,cy:crop.y}};
+  cv.onpointermove=e=>{if(!drag)return;const k=crop.side/cv.getBoundingClientRect().width;crop.x=drag.cx-(e.clientX-drag.x)*k;crop.y=drag.cy-(e.clientY-drag.y)*k;clamp();draw()};
+  cv.onpointerup=cv.onpointercancel=()=>{drag=null;cv.style.cursor='grab'};
+  $$('#cols button').forEach(b=>b.onclick=()=>{color=b.dataset.c;$$('#cols button').forEach(x=>x.style.boxShadow=x===b?`0 0 0 3px #fff,0 0 0 5px ${x.dataset.c}`:'none');draw()});
   $('#eNo').onclick=closeSheet;
   $('#eDel').onclick=()=>{closeSheet();ask(`${m.name} 님을 참가자에서 뺄까요?`,'빼기',()=>remove('member',id))};
+  const np=$('#eNoPic');if(np)np.onclick=async()=>{closeSheet();await patch('member',id,{avatar:null});toast('사진을 뺐어요')};
   $('#eSave').onclick=async()=>{
     $('#eSave').disabled=true;
     try{const d={name:$('#eN').value.trim()||m.name,role:$('#eR').value.trim(),hope:$('#eH').value.trim(),color};
-      if(blob){const {path}=await savePhoto(blob);d.avatar=path}
+      if(img&&crop){const c=document.createElement('canvas');c.width=c.height=400;c.getContext('2d').drawImage(img,crop.x-crop.side/2,crop.y-crop.side/2,crop.side,crop.side,0,0,400,400);
+        const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.88));const {path}=await savePhoto(blob);d.avatar=path}
       closeSheet();await patch('member',id,d);toast('저장했어요')}catch(e){$('#eSave').disabled=false;toast('저장하지 못했어요: '+e.message)}
   };
 }
