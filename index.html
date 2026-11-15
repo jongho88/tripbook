@@ -336,9 +336,16 @@ async function deriveTrip(pw,salt){
   return {tripKey,trip:await sha256hex(tripKey),folder:(await sha256hex('photo:'+tripKey)).slice(0,32)};
 }
 
+async function deriveAdmin(pw,salt){
+  const enc=new TextEncoder();
+  const base=await crypto.subtle.importKey('raw',enc.encode(pw.normalize('NFC').trim()),'PBKDF2',false,['deriveBits']);
+  const adminKey=hex(await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode('urtripbook-admin:'+salt),iterations:210000,hash:'SHA-256'},base,256));
+  return {adminKey,adminHash:await sha256hex(adminKey)};
+}
+
 function RemoteBackend(cfg){
   const base=cfg.url.replace(/\/+$/,''), key=cfg.key, trip=cfg.trip, tk=cfg.tripKey||'';
-  const H=()=>{const h={apikey:key,'x-trip-key':tk};if(!/^sb_/.test(key))h.Authorization='Bearer '+key;return h};
+  const H=()=>{const h={apikey:key,'x-trip-key':tk};if(cfg.adminKey)h['x-admin-key']=cfg.adminKey;if(!/^sb_/.test(key))h.Authorization='Bearer '+key;return h};
   async function rq(path,opt={}){
     const r=await fetch(base+path,{...opt,headers:{...H(),...(opt.headers||{})}});
     if(!r.ok){let t='';try{t=await r.text()}catch(e){}throw new Error(r.status+' '+t.slice(0,200))}
@@ -348,6 +355,8 @@ function RemoteBackend(cfg){
   return {
     kind:'remote',cfg,
     async ping(){await rq(`/rest/v1/tripbook_records?select=id&limit=1`);return true},
+    async isAdmin(adminKey){const r=await rq(`/rest/v1/rpc/tripbook_is_admin`,{method:'POST',headers:{'Content-Type':'application/json',...(adminKey?{'x-admin-key':adminKey}:{})},body:'{}'});return (await r.json())===true},
+    async setAdmin(newHash){await rq(`/rest/v1/rpc/tripbook_set_admin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_hash:newHash})})},
     async hasTrip(){const r=await rq(`/rest/v1/tripbook_records?select=id&trip=eq.${trip}&col=eq.trip&id=eq.meta`);return (await r.json()).length>0},
     async load(){
       const out=[];for(let off=0;;off+=1000){
@@ -577,12 +586,55 @@ language sql stable as $$
   select encode(sha256(convert_to(p || coalesce(current_setting('request.headers', true)::json ->> 'x-trip-key', ''), 'UTF8')), 'hex')
 $$;
 
+-- 총무: 총무 비밀번호에서 만든 열쇠(x-admin-key)의 해시만 보관. 앱에서 직접 읽을 수 없음
+create table if not exists public.tripbook_admins (
+  trip text primary key,
+  admin_hash text not null
+);
+alter table public.tripbook_admins enable row level security;
+revoke all on public.tripbook_admins from anon;
+
+create or replace function public.tripbook_is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.tripbook_admins
+    where trip = public.tripbook_key_hash('')
+      and admin_hash = encode(sha256(convert_to(coalesce(current_setting('request.headers', true)::json ->> 'x-admin-key', ''), 'UTF8')), 'hex'))
+$$;
+
+create or replace function public.tripbook_set_admin(new_hash text) returns void
+language plpgsql security definer set search_path = public as $$
+declare t text := public.tripbook_key_hash('');
+begin
+  if length(coalesce(new_hash, '')) <> 64 then raise exception 'bad hash'; end if;
+  if not exists (select 1 from public.tripbook_records where trip = t and col = 'trip' and id = 'meta') then
+    raise exception 'unknown trip';
+  end if;
+  if exists (select 1 from public.tripbook_admins where trip = t) then
+    if not public.tripbook_is_admin() then raise exception 'not admin'; end if;
+    update public.tripbook_admins set admin_hash = new_hash where trip = t;
+  else
+    insert into public.tripbook_admins (trip, admin_hash) values (t, new_hash);
+  end if;
+end $$;
+grant execute on function public.tripbook_is_admin() to anon;
+grant execute on function public.tripbook_set_admin(text) to anon;
+
+-- 글: 입장 비밀번호로 읽고 쓰기, 진짜 삭제는 총무만
 alter table public.tripbook_records enable row level security;
 grant select, insert, update, delete on public.tripbook_records to anon;
 drop policy if exists "tripbook_key" on public.tripbook_records;
-create policy "tripbook_key" on public.tripbook_records for all to anon
-  using (trip = public.tripbook_key_hash(''))
+drop policy if exists "tripbook_read" on public.tripbook_records;
+drop policy if exists "tripbook_ins" on public.tripbook_records;
+drop policy if exists "tripbook_upd" on public.tripbook_records;
+drop policy if exists "tripbook_del" on public.tripbook_records;
+create policy "tripbook_read" on public.tripbook_records for select to anon
+  using (trip = public.tripbook_key_hash(''));
+create policy "tripbook_ins" on public.tripbook_records for insert to anon
   with check (trip = public.tripbook_key_hash(''));
+create policy "tripbook_upd" on public.tripbook_records for update to anon
+  using (trip = public.tripbook_key_hash('')) with check (trip = public.tripbook_key_hash(''));
+create policy "tripbook_del" on public.tripbook_records for delete to anon
+  using (trip = public.tripbook_key_hash('') and public.tripbook_is_admin());
 
 -- 사진: 비밀번호에서 만든 비밀 폴더에 저장. 목록 보기는 막음
 insert into storage.buckets (id, name, public) values ('tripbook', 'tripbook', true)
@@ -595,9 +647,12 @@ create policy "tripbook_write" on storage.objects for insert to anon
 create policy "tripbook_own" on storage.objects for select to anon
   using (bucket_id = 'tripbook' and (storage.foldername(name))[1] = left(public.tripbook_key_hash('photo:'), 32));
 create policy "tripbook_delete" on storage.objects for delete to anon
-  using (bucket_id = 'tripbook' and (storage.foldername(name))[1] = left(public.tripbook_key_hash('photo:'), 32));`;
+  using (bucket_id = 'tripbook' and (storage.foldername(name))[1] = left(public.tripbook_key_hash('photo:'), 32) and public.tripbook_is_admin());`;
 const CLEAN_SQL=`-- 여행모아 흔적 지우기 (책을 다 받은 뒤에만)
 drop table if exists public.tripbook_records;
+drop table if exists public.tripbook_admins;
+drop function if exists public.tripbook_is_admin();
+drop function if exists public.tripbook_set_admin(text);
 drop function if exists public.tripbook_touch();
 drop function if exists public.tripbook_key_hash(text);
 drop policy if exists "tripbook_write" on storage.objects;
@@ -620,7 +675,10 @@ function rSetup(){
       <li><b>여행 이름과 입장 비밀번호 정하기</b><p class="muted">참가자는 초대 링크를 열고 이 비밀번호를 넣어야 들어올 수 있어요. 6자 이상, 남이 짐작하기 어려운 걸로 정해 주세요. 예: 바다냄새2026</p>
         <label class="lab" for="sTitle">여행 제목</label><input class="in" id="sTitle" placeholder="예: 여섯이서 제주" value="${esc(meta().title||'')}">
         <label class="lab" for="sPw">입장 비밀번호</label><input class="in" id="sPw" type="password" autocomplete="new-password">
-        <label class="lab" for="sPw2">비밀번호 한 번 더</label><input class="in" id="sPw2" type="password" autocomplete="new-password">
+        <label class="lab" for="sPw2">입장 비밀번호 한 번 더</label><input class="in" id="sPw2" type="password" autocomplete="new-password">
+        <p class="muted" style="margin-top:16px">총무 비밀번호는 총무만 압니다. 어느 기기에서든 이걸 넣으면 그 기기가 총무가 되고, 마지막에 온라인 기록을 지울 수 있어요. 입장 비밀번호와 다르게 정해 주세요.</p>
+        <label class="lab" for="sAp">총무 비밀번호</label><input class="in" id="sAp" type="password" autocomplete="new-password">
+        <label class="lab" for="sAp2">총무 비밀번호 한 번 더</label><input class="in" id="sAp2" type="password" autocomplete="new-password">
       </li>
       <li><b>연결하고 초대 링크 받기</b><p class="muted">연결되면 단톡방에 보낼 초대 링크가 만들어집니다.</p><div class="sp"></div>
         ${hasLocal?`<label class="row small" style="margin-bottom:10px"><input type="checkbox" id="sMove" checked style="width:18px;height:18px;accent-color:var(--cobalt)"> 체험 모드에서 쓴 내용도 함께 옮기기</label>`:''}
@@ -634,10 +692,15 @@ function rSetup(){
     const msg=$('#sMsg');
     if(!/^https?:\/\/.+/.test(url)||!key){msg.textContent='Project URL과 키를 모두 붙여넣어 주세요.';return}
     if(pw.trim().length<6){msg.textContent='비밀번호는 6자 이상으로 정해 주세요.';return}
-    if(pw!==pw2){msg.textContent='두 비밀번호가 서로 달라요.';return}
+    if(pw!==pw2){msg.textContent='두 입장 비밀번호가 서로 달라요.';return}
+    const ap=$('#sAp').value,ap2=$('#sAp2').value;
+    if(ap.trim().length<6){msg.textContent='총무 비밀번호도 6자 이상으로 정해 주세요.';return}
+    if(ap!==ap2){msg.textContent='두 총무 비밀번호가 서로 달라요.';return}
+    if(ap.trim()===pw.trim()){msg.textContent='총무 비밀번호는 입장 비밀번호와 다르게 정해 주세요.';return}
     $('#sGo').disabled=true;msg.textContent='연결 확인 중…';
     const salt=uid(16);let nc;
-    try{nc={mode:'remote',url,key,salt,title:title||'우리 여행',...(await deriveTrip(pw,salt))}}catch(e){$('#sGo').disabled=false;msg.textContent=e.message;return}
+    let adm;
+    try{nc={mode:'remote',url,key,salt,title:title||'우리 여행',...(await deriveTrip(pw,salt))};adm=await deriveAdmin(ap,salt)}catch(e){$('#sGo').disabled=false;msg.textContent=e.message;return}
     const be=RemoteBackend(nc);
     try{await be.ping()}catch(e){$('#sGo').disabled=false;msg.innerHTML=`연결하지 못했어요. ${/404|relation|tripbook_records|PGRST/.test(e.message)?'2단계 코드를 실행했는지 확인해 주세요.':'주소와 키를 다시 확인해 주세요.'}<br><span class="faint">${esc(e.message)}</span>`;return}
     try{
@@ -653,8 +716,10 @@ function rSetup(){
       }
       await be.upsert([{k:'trip:meta',col:'trip',id:'meta',data:{...(move?fix(meta()):{}),title:nc.title},t:Date.now(),del:false}]);
       if(!(await be.hasTrip()))throw new Error('저장은 됐는데 다시 읽지 못했어요. 2단계 코드를 최신 것으로 다시 실행해 주세요.');
+      try{await be.setAdmin(adm.adminHash)}catch(e){throw new Error('총무 비밀번호를 저장하지 못했어요. 2단계 코드를 최신 것으로 다시 실행해 주세요. ('+e.message+')')}
+      nc.adminKey=adm.adminKey;
     }catch(e){$('#sGo').disabled=false;msg.textContent='저장하지 못했어요: '+e.message;return}
-    LS.set('tb.owner.'+nc.trip,true);
+
     const me=LS.get('tb.me.local');if(me&&$('#sMove')?.checked)LS.set('tb.me.'+nc.trip,me);
     cfg=nc;LS.set('tb.cfg',cfg);rows.clear();
     await boot();view='share';history.replaceState(null,'','#share');keepJoinInUrl();render();
@@ -733,7 +798,8 @@ function render(){
   if(!cfg)return rWelcome();
   const ms=members();
   if(myId&&!member(myId))myId=null;
-  if(!myId&&!isOwner&&BE.kind==='remote')return rPickMe();
+  const legacyOwner=BE.kind==='remote'&&!isOwner&&!!LS.get('tb.owner.'+cfg.trip);
+  if(!myId&&!isOwner&&!legacyOwner&&BE.kind==='remote')return rPickMe();
   if(!$('#view')){
     $('#root').innerHTML=`<div class="mast"><div class="mast-in"><div class="mast-title"></div><div class="who" id="who"></div></div><nav class="strip" id="strip" aria-label="장 목록"></nav></div><main class="page" id="view"></main>`;
   }
@@ -741,8 +807,10 @@ function render(){
   const me=member(myId);
   $('#who').innerHTML=`<span class="sync off" id="syncDot"><i></i><span></span></span>${me?`<button class="row" id="meBtn" style="gap:6px">${face(me,30)}<span>${esc(me.name)}</span></button>`:''}`;
   setSync(BE.kind==='local'?'off':syncState==='off'?'ok':syncState);
-  const mb=$('#meBtn');if(mb)mb.onclick=()=>ask('다른 이름으로 바꿀까요?','바꾸기',async()=>{myId=null;LS.del('tb.me.'+(cfg.trip||'local'));$('#root').innerHTML='';render()},false);
-  $('#strip').innerHTML=CHAPS.map(c=>`<button data-v="${c.k}" class="${c.k===view?'on':''}">${c.n?`<span class="n">${c.n}</span>`:''}${c.t}</button>`).join('')+`<button data-v="share" class="${view==='share'?'on':''}">함께 쓰기</button>`;
+  const mb=$('#meBtn');if(mb)mb.onclick=meMenu;
+  if(legacyOwner&&!$('#legacyAdm')){setTimeout(()=>{if($('#modal').innerHTML)return;adminPwForm('총무 비밀번호 정하기','총무 기능이 새로 생겼어요. 이 기기에서 여행을 만드셨으니, 총무 비밀번호를 정하면 이 기기가 총무가 됩니다. (먼저 Supabase 설정 코드를 최신 것으로 다시 실행해 주세요)','정하기','총무 비밀번호를 정했어요');const n=document.createElement('i');n.id='legacyAdm';document.body.appendChild(n)},400)}
+  $('#strip').innerHTML=CHAPS.map(c=>`<button data-v="${c.k}" class="${c.k===view?'on':''}">${c.n?`<span class="n">${c.n}</span>`:''}${c.t}</button>`).join('')+(isOwner?`<button data-v="share" class="${view==='share'?'on':''}">함께 쓰기</button>`:'');
+  if(view==='share'&&!isOwner)view='cover';
   $$('#strip button').forEach(b=>b.onclick=()=>go(b.dataset.v));
   const on=$('#strip .on');if(on)on.scrollIntoView({block:'nearest',inline:'nearest'});
   const v=$('#view');
@@ -1016,6 +1084,46 @@ function rMoney(v){
   $$('[data-xx]',v).forEach(b=>b.onclick=()=>remove('expense',b.dataset.xx));
 }
 
+/* ---- 내 이름 메뉴: 이름 바꾸기 / 총무 되기 / 나가기 ---- */
+function leaveDevice(){clearInterval(syncTimer);if(cfg?.trip)LS.del('tb.cache.'+cfg.trip);LS.del('tb.cfg');cfg=null;rows.clear();isOwner=false;$('#root').innerHTML='';clearJoinFromUrl();render()}
+function meMenu(){
+  const remote=BE.kind==='remote';
+  openSheet(`<h2>${esc(member(myId)?.name||'이 기기')}</h2><p class="muted small" style="margin-bottom:14px">${remote?(isOwner?'이 기기는 총무 기기입니다.':'이 기기는 참가자 기기입니다.'):'체험 모드입니다.'}</p>
+    <div style="display:grid;gap:8px">
+      <button class="btn line" id="mmName">다른 이름으로 바꾸기</button>
+      ${remote&&!isOwner?'<button class="btn line" id="mmAdmin">총무 되기</button>':''}
+      ${remote?'<button class="btn quiet" id="mmLeave">이 기기에서 나가기</button>':''}
+      <button class="btn quiet" id="mmX">닫기</button>
+    </div>${remote?'<p class="small faint" style="margin-top:10px">나가기는 이 기기에서만 빠지는 것이고, 쓴 글은 그대로 남아요. 다시 들어오려면 초대 링크와 입장 비밀번호가 필요해요.</p>':''}`);
+  $('#mmX').onclick=closeSheet;
+  $('#mmName').onclick=()=>{closeSheet();myId=null;LS.del('tb.me.'+(cfg.trip||'local'));$('#root').innerHTML='';render()};
+  const a=$('#mmAdmin');if(a)a.onclick=becomeAdmin;
+  const l=$('#mmLeave');if(l)l.onclick=()=>{closeSheet();ask('이 기기에서 나갈까요?','나가기',leaveDevice,false)};
+}
+function becomeAdmin(){
+  openSheet(`<h2>총무 되기</h2><p class="muted" style="margin:6px 0 4px">총무 비밀번호를 넣으면 이 기기가 총무가 됩니다. 초대 링크를 보고, 마지막에 온라인 기록을 지울 수 있어요.</p>
+    <form id="baF"><label class="lab" for="baPw">총무 비밀번호</label><input class="in" id="baPw" type="password" autocomplete="current-password">
+    <div class="sp"></div><div class="row"><button class="btn grow" id="baGo">확인</button><button class="btn quiet" type="button" id="baNo">취소</button></div></form><p class="small muted" id="baMsg" style="margin-top:10px;min-height:1.6em"></p>`);
+  $('#baNo').onclick=closeSheet;
+  $('#baF').onsubmit=async e=>{e.preventDefault();const pw=$('#baPw').value;if(!pw.trim())return;const msg=$('#baMsg');$('#baGo').disabled=true;msg.textContent='확인 중…';
+    try{const {adminKey}=await deriveAdmin(pw,cfg.salt);
+      if(!(await BE.isAdmin(adminKey))){msg.textContent='총무 비밀번호가 맞지 않아요.';$('#baGo').disabled=false;$('#baPw').select();return}
+      cfg.adminKey=adminKey;LS.set('tb.cfg',cfg);BE=RemoteBackend(cfg);isOwner=true;closeSheet();toast('이 기기가 총무가 됐어요');render();
+    }catch(err){console.warn(err);msg.textContent=/tripbook_is_admin|404|PGRST/.test(err.message)?'총무 기능이 아직 설정되지 않았어요. 총무에게 Supabase 설정 코드를 다시 실행해 달라고 해 주세요.':'연결하지 못했어요. 인터넷 연결을 확인해 주세요.';$('#baGo').disabled=false}};
+}
+function adminPwForm(title,desc,okLabel,onDone){
+  openSheet(`<h2>${title}</h2><p class="muted" style="margin:6px 0 4px">${desc}</p>
+    <form id="apF"><label class="lab" for="apA">새 총무 비밀번호</label><input class="in" id="apA" type="password" autocomplete="new-password">
+    <label class="lab" for="apB">한 번 더</label><input class="in" id="apB" type="password" autocomplete="new-password">
+    <div class="sp"></div><div class="row"><button class="btn grow" id="apGo">${okLabel}</button><button class="btn quiet" type="button" id="apNo">취소</button></div></form><p class="small muted" id="apMsg" style="margin-top:10px;min-height:1.6em"></p>`);
+  $('#apNo').onclick=closeSheet;
+  $('#apF').onsubmit=async e=>{e.preventDefault();const a=$('#apA').value,b=$('#apB').value,msg=$('#apMsg');
+    if(a.trim().length<6){msg.textContent='6자 이상으로 정해 주세요.';return}if(a!==b){msg.textContent='두 비밀번호가 서로 달라요.';return}
+    $('#apGo').disabled=true;msg.textContent='저장 중…';
+    try{const {adminKey,adminHash}=await deriveAdmin(a,cfg.salt);await BE.setAdmin(adminHash);cfg.adminKey=adminKey;LS.set('tb.cfg',cfg);BE=RemoteBackend(cfg);isOwner=true;LS.del('tb.owner.'+cfg.trip);closeSheet();toast(onDone);render()}
+    catch(err){console.warn(err);$('#apGo').disabled=false;msg.textContent=/not admin/.test(err.message)?'이미 총무 비밀번호가 정해져 있어요. 내 이름 메뉴의 「총무 되기」로 들어와 주세요.':/tripbook_set_admin|404|PGRST/.test(err.message)?'Supabase 설정 코드를 최신 것으로 다시 실행해 주세요.':'저장하지 못했어요: '+err.message}};
+}
+
 /* ---- 함께 쓰기 (초대) ---- */
 function rShare(v){
   if(BE.kind==='local'){
@@ -1029,9 +1137,11 @@ function rShare(v){
     <div class="block"><h3>입장 비밀번호</h3><p class="muted">링크만으로는 들어올 수 없어요. 비밀번호가 맞아야 서버가 글과 사진을 열어 줍니다. 비밀번호는 총무가 정한 그대로이고, 이 앱 어디에도 다시 보여 주지 않아요.</p></div>
     <div class="note">링크와 비밀번호를 둘 다 아는 사람만 들어올 수 있어요. 단톡방에 함께 올려도 되지만, 그 단톡방 밖으로는 나가지 않게 해 주세요.</div>
     <div class="note">Supabase 무료 프로젝트는 7일 동안 아무도 쓰지 않으면 잠시 멈춥니다. 그럴 땐 총무가 Supabase 화면에서 Restore를 한 번 누르면 다시 열려요.</div>
-    <hr class="rule"><button class="btn quiet sm" id="leave">이 기기에서 나가기</button><p class="small faint" style="margin-top:6px">다른 사람과 같이 쓰는 기기라면 눌러 주세요. 다시 들어오려면 링크와 비밀번호가 필요해요.</p>`;
+    <div class="block"><h3>총무</h3><p class="muted">이 기기는 총무 기기입니다. 다른 기기에서도 내 이름 메뉴의 「총무 되기」에 총무 비밀번호를 넣으면 총무가 돼요. 참가자에게는 이 「함께 쓰기」 메뉴가 보이지 않습니다.</p>
+      <div class="sp"></div><div class="row"><button class="btn line sm" id="apChange">총무 비밀번호 바꾸기</button><button class="btn quiet sm" id="apDrop">이 기기 총무 그만하기</button></div></div>`;
   $('#cpL').onclick=()=>copyText(link);
-  $('#leave').onclick=()=>ask('이 기기에서 나갈까요?','나가기',()=>{clearInterval(syncTimer);LS.del('tb.cache.'+cfg.trip);LS.del('tb.cfg');cfg=null;rows.clear();$('#root').innerHTML='';clearJoinFromUrl();render()},false);
+  $('#apChange').onclick=()=>adminPwForm('총무 비밀번호 바꾸기','새 총무 비밀번호를 정해 주세요. 다른 기기의 총무는 새 비밀번호로 다시 「총무 되기」를 해야 해요.','바꾸기','총무 비밀번호를 바꿨어요');
+  $('#apDrop').onclick=()=>ask('이 기기의 총무 자격을 내려놓을까요? 총무 비밀번호로 언제든 다시 될 수 있어요.','그만하기',()=>{delete cfg.adminKey;LS.set('tb.cfg',cfg);BE=RemoteBackend(cfg);isOwner=false;view='cover';history.replaceState(null,'','#cover');render()},false);
 }
 
 /* ---- 책 만들기 ---- */
@@ -1060,6 +1170,7 @@ function wipeRemote(){
     $('#wGo').disabled=true;const bar=$('#wBar');bar.style.display='';
     const on=(p,m)=>{bar.firstChild.style.width=p*100+'%';$('#wMsg').textContent=m};
     try{clearInterval(syncTimer);on(.05,'사진 목록 확인 중');
+      try{applyRemote(await BE.load())}catch(e){console.warn(e)}
       const paths=new Set();rows.forEach(r=>{const d=r.data||{};['path','avatar','cover'].forEach(k=>{if(d[k]&&String(d[k]).startsWith(cfg.folder+'/'))paths.add(d[k])})});
       const res=await BE.wipe([...paths],on);
       LS.del(outboxKey());LS.del('tb.cache.'+cfg.trip);
@@ -1151,7 +1262,7 @@ async function boot(){
   if(!cfg){render();return}
   $('#root').innerHTML='<main class="welcome"><p class="muted">불러오는 중…</p></main>';
   if(cfg.mode==='remote'){
-    BE=RemoteBackend(cfg);isOwner=!!LS.get('tb.owner.'+cfg.trip);
+    BE=RemoteBackend(cfg);isOwner=!!cfg.adminKey;
     const cache=LS.get('tb.cache.'+cfg.trip);
     if(cache){cache.rows.forEach(r=>rows.set(r.k,r));lastServer=cache.last||0}
     const ob=LS.get(outboxKey(),{});Object.values(ob).forEach(r=>rows.set(r.k,r));
