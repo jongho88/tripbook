@@ -190,6 +190,29 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .ph.one img{aspect-ratio:4/3}
 .ph.two{grid-template-columns:1fr 1fr}
 
+/* ---------- map ---------- */
+.mapbox{position:relative;height:360px;border-radius:18px;overflow:hidden;background:#E3E8F0;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;border:1px solid var(--line)}
+.mapbox .tiles,.mapbox .over{position:absolute;inset:0}
+.mapbox .tiles img{position:absolute;width:256px;height:256px;max-width:none;pointer-events:none}
+.mapbox .pin{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(20,33,61,.45);cursor:pointer}
+.mapbox .pin.last{width:24px;height:24px;margin:-12px 0 0 -12px}
+.mapbox svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mapbox .zoom{position:absolute;right:10px;top:10px;display:grid;gap:6px}
+.mapbox .zoom button{width:36px;height:36px;border-radius:10px;background:#fff;box-shadow:0 1px 4px rgba(20,33,61,.25);font-size:20px;font-weight:700}
+.mapbox .attr{position:absolute;right:0;bottom:0;background:rgba(255,255,255,.85);font-size:10px;padding:2px 6px;border-top-left-radius:6px}
+.mapbox .attr a{color:var(--ink2)}
+.mapbox .pop{position:absolute;transform:translate(-50%,calc(-100% - 18px));background:#fff;border-radius:12px;padding:8px 12px;box-shadow:0 4px 14px rgba(20,33,61,.25);font-size:13px;white-space:nowrap;pointer-events:none}
+.mapbox .empty-map{position:absolute;inset:0;display:grid;place-items:center;color:var(--ink2);font-size:14px;text-align:center;padding:20px}
+.recbtn{width:100%;min-height:56px;font-size:17px;border-radius:16px}
+.locrow{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line2)}
+.locrow .tm{font-weight:800;font-variant-numeric:tabular-nums;font-size:15px}
+.locrow .nm{font-weight:700}
+.locrow .meta{font-size:12px;color:var(--ink3)}
+.dchips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:12px 0}
+.dchips::-webkit-scrollbar{display:none}
+.dchips button{flex:none;padding:6px 12px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-size:13px}
+.dchips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
 /* ---------- album ---------- */
 .album{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 @media (min-width:640px){.album{grid-template-columns:repeat(3,1fr)}}
@@ -288,6 +311,7 @@ const CHAPS=[
   {k:'prep',n:2,t:'준비'},
   {k:'plan',n:3,t:'계획'},
   {k:'log',n:4,t:'여행 일기'},
+  {k:'map',t:'위치 기록'},
   {k:'album',n:5,t:'앨범'},
   {k:'refl',n:6,t:'소회'},
   {k:'money',t:'정산'},
@@ -673,7 +697,7 @@ function rSetup(){
         <label class="lab" for="sKey">anon 또는 publishable 키</label><input class="in" id="sKey" placeholder="eyJ… 또는 sb_publishable_…" autocomplete="off">
       </li>
       <li><b>여행 이름과 입장 비밀번호 정하기</b><p class="muted">참가자는 초대 링크를 열고 이 비밀번호를 넣어야 들어올 수 있어요. 6자 이상, 남이 짐작하기 어려운 걸로 정해 주세요. 예: 바다냄새2026</p>
-        <label class="lab" for="sTitle">여행 제목</label><input class="in" id="sTitle" placeholder="예: 여섯이서 제주" value="${esc(meta().title||'')}">
+        <label class="lab" for="sTitle">여행 제목</label><input class="in" id="sTitle" placeholder="예: 여섯이서 요세미티" value="${esc(meta().title||'')}">
         <label class="lab" for="sPw">입장 비밀번호</label><input class="in" id="sPw" type="password" autocomplete="new-password">
         <label class="lab" for="sPw2">입장 비밀번호 한 번 더</label><input class="in" id="sPw2" type="password" autocomplete="new-password">
         <p class="muted" style="margin-top:16px">총무 비밀번호는 총무만 압니다. 어느 기기에서든 이걸 넣으면 그 기기가 총무가 되고, 마지막에 온라인 기록을 지울 수 있어요. 입장 비밀번호와 다르게 정해 주세요.</p>
@@ -814,7 +838,7 @@ function render(){
   $$('#strip button').forEach(b=>b.onclick=()=>go(b.dataset.v));
   const on=$('#strip .on');if(on)on.scrollIntoView({block:'nearest',inline:'nearest'});
   const v=$('#view');
-  ({cover:rCover,people:rPeople,prep:rPrep,plan:rPlan,log:rLog,album:rAlbum,refl:rRefl,money:rMoney,book:rBook,share:rShare}[view]||rCover)(v);
+  ({cover:rCover,people:rPeople,prep:rPrep,plan:rPlan,log:rLog,map:rMap,album:rAlbum,refl:rRefl,money:rMoney,book:rBook,share:rShare}[view]||rCover)(v);
 }
 function go(k){view=k;history.replaceState(null,'','#'+k);render();window.scrollTo({top:0})}
 
@@ -828,6 +852,7 @@ function rCover(v){
     ['prep',2,'준비',prep.length?`예약 ${prep.length}건 중 ${prep.filter(p=>p.status==='done').length}건 확정`:'예약 카드 없음'],
     ['plan',3,'계획',plans.length?`일정 ${plans.length}개`:'일정 없음'],
     ['log',4,'여행 일기',logs.length?`${logs.length}편`:'여행 중에 써요'],
+    ['map',null,'위치 기록',all('loc').length?`${all('loc').length}곳`:'여행 중에 기록해요'],
     ['album',5,'앨범',ph.length?`사진 ${ph.length}장`:'사진 없음'],
     ['refl',6,'소회',`${refl.length}/${ms.length||0}명 작성`],
     ['money',null,'정산',ex.length?won(ex.reduce((s,e)=>s+e.amount,0)):'지출 없음']
@@ -851,9 +876,9 @@ function rCover(v){
     <ol class="toc">${toc.map(([k,n,t,s])=>`<li><button data-go="${k}"><span class="n">${n??''}</span><span class="t">${t}</span><span class="s">${esc(s)}</span></button></li>`).join('')}</ol>
     <div class="block" style="margin-top:28px">
       <h3>여행 정보</h3>
-      <label class="lab" for="fT">여행 제목</label><input class="in" id="fT" data-f="trip/meta/title" value="${esc(m.title||'')}" placeholder="예: 여섯이서 제주">
-      <label class="lab" for="fS">한 줄 소개</label><input class="in" id="fS" data-f="trip/meta/sub" value="${esc(m.sub||'')}" placeholder="예: 스무 살에 약속한 그 여행">
-      <label class="lab" for="fP">여행지</label><input class="in" id="fP" data-f="trip/meta/place" value="${esc(m.place||'')}" placeholder="예: 제주">
+      <label class="lab" for="fT">여행 제목</label><input class="in" id="fT" data-f="trip/meta/title" value="${esc(m.title||'')}" placeholder="예: 여섯이서 요세미티">
+      <label class="lab" for="fS">한 줄 소개</label><input class="in" id="fS" data-f="trip/meta/sub" value="${esc(m.sub||'')}" placeholder="예: 대학 동기 여섯, 십 년 만의 로드트립">
+      <label class="lab" for="fP">여행지</label><input class="in" id="fP" data-f="trip/meta/place" value="${esc(m.place||'')}" placeholder="예: Yosemite National Park">
       <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="fA">출발일</label><input class="in" type="date" id="fA" data-f="trip/meta/start" data-rerender="1" value="${esc(m.start||'')}"></div>
       <div class="grow"><label class="lab" for="fB">돌아오는 날</label><input class="in" type="date" id="fB" data-f="trip/meta/end" data-rerender="1" value="${esc(m.end||'')}"></div></div>
       <label class="lab">표지 사진</label>
@@ -942,7 +967,7 @@ function rPrep(v){
     ${items.length?`<p style="margin-top:14px;text-align:right">예약 합계 <b class="hl">${won(sum)}</b></p>`:'<div class="empty"><b>예약 카드가 없어요</b>위의 버튼으로 첫 예약을 남겨 주세요.</div>'}
     <div class="block" style="margin-top:26px"><h3>챙길 것</h3>
       <ul class="checks">${checks.map(c=>`<li><input type="checkbox" aria-label="${esc(c.text)}" data-ck="${c.id}" ${c.done?'checked':''}><span class="grow ${c.done?'done':''}">${esc(c.text)}</span>${c.who?face(member(c.who),24):''}<button class="btn quiet sm" data-cx="${c.id}" aria-label="삭제">빼기</button></li>`).join('')}</ul>
-      <div class="row" style="margin-top:12px"><input class="in grow" id="cT" placeholder="예: 국제운전면허증, 멀티탭" aria-label="챙길 것"><select class="sel" id="cW" style="width:auto" aria-label="담당"><option value="">모두</option>${members().map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select><button class="btn" id="cAdd">추가</button></div></div>`;
+      <div class="row" style="margin-top:12px"><input class="in grow" id="cT" placeholder="예: 국립공원 패스, 보조배터리" aria-label="챙길 것"><select class="sel" id="cW" style="width:auto" aria-label="담당"><option value="">모두</option>${members().map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select><button class="btn" id="cAdd">추가</button></div></div>`;
   $$('[data-add]',v).forEach(b=>b.onclick=()=>editPrep(null,b.dataset.add));
   $$('[data-ed]',v).forEach(b=>b.onclick=()=>editPrep(b.dataset.ed));
   $$('[data-ck]',v).forEach(c=>c.onchange=()=>patch('check',c.dataset.ck,{done:c.checked}));
@@ -952,7 +977,7 @@ function rPrep(v){
 }
 function editPrep(id,type){
   const p=id?one('prep',id):{type,status:'none',expense:true};const nid=id||uid(8);
-  const ph={stay:'예: 애월 바다펜션 2박',flight:'예: 김포→제주 7C101 08:30',car:'예: 카니발 9인승 3일',etc:'예: 여행자 보험'}[p.type]||'';
+  const ph={stay:'예: Yosemite Valley Lodge 2박',flight:'예: JFK → SFO UA 1234 08:30',car:'예: Chevy Suburban 4일 (SFO 픽업)',etc:'예: 국립공원 연간 패스'}[p.type]||'';
   openSheet(`<h2>${PREP[p.type]||'기타'}</h2>
     <label class="lab" for="qT">무엇을 예약했나요</label><input class="in" id="qT" value="${esc(p.title||'')}" placeholder="${ph}">
     <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qD">날짜</label><input class="in" type="date" id="qD" value="${esc(p.date||'')}"></div><div class="grow"><label class="lab" for="qC">금액(원)</label><input class="in" type="number" inputmode="numeric" id="qC" value="${esc(p.cost||'')}"></div></div>
@@ -978,7 +1003,7 @@ function rPlan(v){
   const theme=one('theme','d'+planDay)?.text||'';
   v.innerHTML=chapHead('plan','날짜를 골라 일정을 채워 주세요. 가고 싶은 곳에는 손을 들어 두면 누가 원하는지 보입니다.')+`
     <div class="dates" role="tablist">${ds.map(d=>`<button role="tab" data-d="${d.i}" class="${d.i===planDay?'on':''}" aria-selected="${d.i===planDay}"><span>${d.wd}</span><b>${d.date.getDate()}</b><span>${d.i+1}일째</span></button>`).join('')}</div>
-    <input class="under" style="font-size:20px;font-weight:800;margin:10px 0 18px" id="thm" value="${esc(theme)}" placeholder="${dayName(planDay)}의 테마 (예: 동쪽 해안 드라이브)" aria-label="이날의 테마">
+    <input class="under" style="font-size:20px;font-weight:800;margin:10px 0 18px" id="thm" value="${esc(theme)}" placeholder="${dayName(planDay)}의 테마 (예: Highway 1 해안 드라이브)" aria-label="이날의 테마">
     <ol class="tl">${items.map(it=>{const vs=all('vote').filter(x=>x.item===it.id&&x.on).map(x=>x.member);const mine=vs.includes(myId);return `<li><div class="tm">${esc(it.time||'')}</div><div><div class="dot"></div></div><div>
       <div class="pl">${esc(it.place)}</div>${it.note?`<div class="nt">${esc(it.note)}</div>`:''}
       <div class="vote"><button class="like ${mine?'on':''}" data-vt="${it.id}">${mine?'가고 싶어요 ✓':'가고 싶어요'}</button>${vs.length?`<span class="faces">${vs.map(id=>face(member(id),24)).join('')}</span>`:''}<button class="btn quiet sm" data-px="${it.id}" style="margin-left:auto">빼기</button></div></div></li>`}).join('')}</ol>
@@ -1022,6 +1047,108 @@ function rLog(v){
     await put('log',id,{day,author:myId,text,weather,created:Date.now()});toast('올렸어요');
   };
   $$('[data-lx]',v).forEach(b=>b.onclick=()=>ask('이 일기를 지울까요? 사진은 앨범에 남아요.','지우기',()=>remove('log',b.dataset.lx)));
+}
+
+/* ---- 위치 기록 ---- */
+const TILE='https://tile.openstreetmap.org/';
+const lon2x=(lon,z)=>(lon+180)/360*256*Math.pow(2,z);
+const lat2y=(lat,z)=>{const r=lat*Math.PI/180;return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*256*Math.pow(2,z)};
+function fitZoom(pts,W,H,pad=50){
+  if(!pts.length)return{z:3,cx:lon2x(-98,3),cy:lat2y(39,3)}; // 미국 전체
+  if(pts.length===1)return{z:15,cx:lon2x(pts[0].lng,15),cy:lat2y(pts[0].lat,15)};
+  for(let z=17;z>=2;z--){const xs=pts.map(p=>lon2x(p.lng,z)),ys=pts.map(p=>lat2y(p.lat,z));
+    const w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);
+    if(w<=W-pad*2&&h<=H-pad*2)return{z,cx:(Math.max(...xs)+Math.min(...xs))/2,cy:(Math.max(...ys)+Math.min(...ys))/2}}
+  return{z:2,cx:lon2x(0,2),cy:lat2y(20,2)};
+}
+function dayOf(ms){const ds=days();if(!ds.length)return null;const d=new Date(ms);d.setHours(0,0,0,0);const i=ds.findIndex(x=>x.date.getTime()===d.getTime());return i>=0?i:null}
+const hhmm=ms=>{const d=new Date(ms);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+function locs(){return all('loc').filter(l=>isFinite(l.lat)&&isFinite(l.lng)).map(l=>({...l,day:dayOf(l.at)})).sort((a,b)=>a.at-b.at)}
+/* 지도: 외부 라이브러리 없이 OpenStreetMap 타일을 직접 깔고 점과 선을 그림 */
+function mountMap(el,pts){
+  const W=()=>el.clientWidth,H=()=>el.clientHeight;
+  let st=fitZoom(pts,W()||360,H()||360),pop=null;
+  el.innerHTML='<div class="tiles"></div><svg></svg><div class="over"></div><div class="zoom"><button aria-label="확대">+</button><button aria-label="축소">−</button></div><div class="attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</div>'+(pts.length?'':'<div class="empty-map">아직 기록한 곳이 없어요.<br>아래 버튼으로 첫 위치를 남겨 주세요.</div>');
+  const tl=el.querySelector('.tiles'),sv=el.querySelector('svg'),ov=el.querySelector('.over');
+  function draw(){
+    const z=st.z,n=Math.pow(2,z),w=W(),h=H(),ox=st.cx-w/2,oy=st.cy-h/2;
+    let html='';const x0=Math.floor(ox/256),x1=Math.floor((ox+w)/256),y0=Math.max(0,Math.floor(oy/256)),y1=Math.min(n-1,Math.floor((oy+h)/256));
+    for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const tx=((x%n)+n)%n;html+=`<img src="${TILE}${z}/${tx}/${y}.png" style="left:${x*256-ox}px;top:${y*256-oy}px" alt="" draggable="false" referrerpolicy="strict-origin-when-cross-origin">`}
+    tl.innerHTML=html;
+    const P=p=>[lon2x(p.lng,z)-ox,lat2y(p.lat,z)-oy];
+    const byDay={};pts.forEach(p=>(byDay[p.day??'x']=byDay[p.day??'x']||[]).push(p));
+    sv.innerHTML=Object.values(byDay).map(arr=>arr.length>1?`<polyline points="${arr.map(p=>P(p).join(',')).join(' ')}" fill="none" stroke="#2340E0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 9" opacity=".9"/>`:'').join('');
+    ov.innerHTML=pts.map((p,i)=>{const [x,y]=P(p);return `<div class="pin ${i===pts.length-1?'last':''}" data-i="${i}" style="left:${x}px;top:${y}px;background:${mcol(member(p.author))}" role="button" aria-label="${esc(p.name||'위치')}"></div>`}).join('')+(pop!=null&&pts[pop]?(()=>{const p=pts[pop],[x,y]=P(p);return `<div class="pop" style="left:${x}px;top:${y}px"><b>${esc(p.name||'이름 없는 곳')}</b><br><span class="muted">${esc(nameOf(p.author))}, ${p.day!=null?(p.day+1)+'일째 ':''}${hhmm(p.at)}</span></div>`})():'');
+    ov.querySelectorAll('.pin').forEach(d=>d.onpointerdown=e=>{e.stopPropagation();pop=Number(d.dataset.i)===pop?null:Number(d.dataset.i);draw()});
+  }
+  const zoomBy=dz=>{const nz=Math.max(2,Math.min(18,st.z+dz));const k=Math.pow(2,nz-st.z);st={z:nz,cx:st.cx*k,cy:st.cy*k};draw()};
+  const [zi,zo]=el.querySelectorAll('.zoom button');zi.onclick=e=>{e.stopPropagation();zoomBy(1)};zo.onclick=e=>{e.stopPropagation();zoomBy(-1)};
+  zi.onpointerdown=zo.onpointerdown=e=>e.stopPropagation();
+  let drag=null;
+  el.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,cx:st.cx,cy:st.cy,moved:false};el.setPointerCapture(e.pointerId);el.style.cursor='grabbing'};
+  el.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;st.cx=drag.cx-dx;st.cy=drag.cy-dy;draw()};
+  el.onpointerup=el.onpointercancel=()=>{if(drag&&!drag.moved&&pop!=null){pop=null;draw()}drag=null;el.style.cursor='grab'};
+  el.ondblclick=()=>zoomBy(1);
+  draw();
+  return{redraw:draw};
+}
+let mapDay='all';
+function rMap(v){
+  const ds=days(),L=locs();
+  if(mapDay!=='all'&&mapDay!=='x'&&!ds[mapDay])mapDay='all';
+  const shown=mapDay==='all'?L:L.filter(l=>String(l.day??'x')===String(mapDay));
+  const has=k=>L.some(l=>String(l.day??'x')===String(k));
+  v.innerHTML=chapHead('map','머문 곳에서 버튼을 눌러 위치를 남겨 주세요. 같은 날 기록한 곳은 시간 순서대로 이어져서, 그날의 경로가 됩니다.')+`
+    <button class="btn recbtn" id="recBtn">📍 현재 위치 기록</button>
+    <p class="small muted" id="recMsg" style="margin:8px 2px 0;min-height:1.4em"></p>
+    <div class="dchips"><button data-md="all" class="${mapDay==='all'?'on':''}">전체 ${L.length}</button>${ds.map(d=>`<button data-md="${d.i}" class="${String(mapDay)===String(d.i)?'on':''}" ${has(d.i)?'':'style="opacity:.5"'}>${d.i+1}일째 ${d.md}</button>`).join('')}${has('x')?`<button data-md="x" class="${mapDay==='x'?'on':''}">여행 날짜 밖</button>`:''}</div>
+    <div class="mapbox" id="mapBox" aria-label="위치 기록 지도"></div>
+    <div style="margin-top:14px">${shown.length?groupLocs(shown).map(([k,arr])=>`<div class="day-h"><b>${k==='x'?'여행 날짜 밖':(Number(k)+1)+'일째'}</b><span>${k!=='x'&&ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${arr.length}곳</span></div>
+      ${arr.map(l=>`<div class="locrow">${face(member(l.author),34)}<div><div><span class="tm">${hhmm(l.at)}</span> <span class="nm">${esc(l.name||'이름 없는 곳')}</span></div><div class="meta">${esc(nameOf(l.author))}${l.acc?`, 오차 약 ${l.acc<1000?Math.round(l.acc)+'m':(l.acc/1000).toFixed(1)+'km'}`:''}</div></div>${l.author===myId||isOwner?`<button class="btn quiet sm" data-lx="${l.id}">지우기</button>`:''}</div>`).join('')}`).join(''):'<div class="empty"><b>아직 기록한 곳이 없어요</b>여행지에 도착하면 위의 버튼을 눌러 주세요.</div>'}</div>`;
+  mountMap($('#mapBox'),shown);
+  $$('[data-md]',v).forEach(b=>b.onclick=()=>{mapDay=b.dataset.md==='all'||b.dataset.md==='x'?b.dataset.md:Number(b.dataset.md);render()});
+  $$('[data-lx]',v).forEach(b=>b.onclick=()=>ask('이 위치 기록을 지울까요?','지우기',()=>remove('loc',b.dataset.lx)));
+  $('#recBtn').onclick=recordHere;
+}
+function groupLocs(arr){const g={};arr.forEach(l=>(g[l.day??'x']=g[l.day??'x']||[]).push(l));return Object.entries(g).sort((a,b)=>(a[0]==='x')-(b[0]==='x')||a[0]-b[0])}
+function recordHere(){
+  const msg=$('#recMsg'),btn=$('#recBtn');
+  if(!myId){toast('먼저 내 이름을 골라 주세요');return}
+  if(!navigator.geolocation){msg.textContent='이 브라우저는 위치 기능을 지원하지 않아요.';return}
+  btn.disabled=true;msg.textContent='위치 찾는 중… (처음이면 위치 허용 창이 떠요)';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    btn.disabled=false;msg.textContent='';
+    const {latitude:lat,longitude:lng,accuracy:acc}=pos.coords;const at=Date.now();
+    openSheet(`<h2>여기를 기록할까요?</h2><p class="muted small" style="margin:4px 0 0">${hhmm(at)}, 오차 약 ${acc<1000?Math.round(acc)+'m':(acc/1000).toFixed(1)+'km'}${acc>200?' (실내라 조금 부정확할 수 있어요)':''}</p>
+      <form id="lcF"><label class="lab" for="lcN">장소 이름 (선택)</label><input class="in" id="lcN" placeholder="예: Golden Gate Bridge" autocomplete="off">
+      <div class="sp"></div><div class="row"><button class="btn grow" id="lcGo">기록하기</button><button class="btn quiet" type="button" id="lcNo">취소</button></div></form>`);
+    $('#lcNo').onclick=closeSheet;
+    $('#lcF').onsubmit=async e=>{e.preventDefault();const name=$('#lcN').value.trim();closeSheet();
+      await put('loc',uid(10),{author:myId,lat:Math.round(lat*1e6)/1e6,lng:Math.round(lng*1e6)/1e6,acc:Math.round(acc),at,name});toast(name?`${name} 기록했어요`:'기록했어요')};
+  },err=>{
+    btn.disabled=false;
+    if(err.code===1){
+      msg.innerHTML=IS_IOS?(STANDALONE?'위치 사용이 막혀 있어요. 홈 화면 앱에서 계속 안 되면 <b>Safari로 여행모아를 열어</b> 기록해 주세요. 설정 › 개인정보 보호 및 보안 › 위치 서비스가 켜져 있는지도 확인해 주세요.'
+        :'위치 사용이 막혀 있어요. 아이폰 <b>설정 › 개인정보 보호 및 보안 › 위치 서비스 › Safari 웹 사이트</b>를 「앱을 사용하는 동안」으로 바꾼 뒤 다시 눌러 주세요.')
+        :'위치 사용이 막혀 있어요. 주소창 왼쪽 <b>자물쇠(또는 설정) 아이콘 › 권한 › 위치</b>를 「허용」으로 바꾼 뒤 다시 눌러 주세요.';
+    }else msg.textContent=err.code===3?'위치를 찾는 데 시간이 너무 걸렸어요. 하늘이 보이는 곳에서 다시 눌러 주세요.':'지금은 위치를 찾을 수 없어요. 잠시 뒤 다시 눌러 주세요.';
+  },{enableHighAccuracy:true,timeout:20000,maximumAge:15000});
+}
+/* 책용 지도 그림: 타일을 캔버스에 그려 이미지로. 실패하면 배경 없이 점과 선만 */
+function loadTile(url){return new Promise(res=>{const i=new Image();i.crossOrigin='anonymous';const t=setTimeout(()=>res(null),5000);i.onload=()=>{clearTimeout(t);res(i)};i.onerror=()=>{clearTimeout(t);res(null)};i.src=url})}
+async function staticMap(pts,W=720,H=420){
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+  const st=fitZoom(pts,W,H,60);const z=st.z,n=Math.pow(2,z),ox=st.cx-W/2,oy=st.cy-H/2;
+  x.fillStyle='#E3E8F0';x.fillRect(0,0,W,H);
+  const jobs=[];for(let tx=Math.floor(ox/256);tx<=Math.floor((ox+W)/256);tx++)for(let ty=Math.max(0,Math.floor(oy/256));ty<=Math.min(n-1,Math.floor((oy+H)/256));ty++)jobs.push([tx,ty]);
+  const imgs=await Promise.all(jobs.map(([tx,ty])=>loadTile(`${TILE}${z}/${((tx%n)+n)%n}/${ty}.png`)));
+  let tiles=true;try{imgs.forEach((im,i)=>{if(im)x.drawImage(im,jobs[i][0]*256-ox,jobs[i][1]*256-oy)});x.getImageData(0,0,1,1)}catch(e){tiles=false;x.fillStyle='#E3E8F0';x.fillRect(0,0,W,H)}
+  const P=p=>[lon2x(p.lng,z)-ox,lat2y(p.lat,z)-oy];
+  if(pts.length>1){x.strokeStyle='#2340E0';x.lineWidth=4;x.lineCap='round';x.lineJoin='round';x.setLineDash([2,9]);x.beginPath();pts.forEach((p,i)=>{const [a,b]=P(p);i?x.lineTo(a,b):x.moveTo(a,b)});x.stroke();x.setLineDash([])}
+  pts.forEach((p,i)=>{const [a,b]=P(p);x.beginPath();x.arc(a,b,9,0,7);x.fillStyle=mcol(member(p.author));x.fill();x.lineWidth=3;x.strokeStyle='#fff';x.stroke();
+    x.font='700 12px sans-serif';x.fillStyle='#fff';x.textAlign='center';x.textBaseline='middle';x.fillText(String(i+1),a,b+.5)});
+  if(tiles&&imgs.some(Boolean)){x.font='11px sans-serif';const t='© OpenStreetMap contributors';const tw=x.measureText(t).width;x.fillStyle='rgba(255,255,255,.85)';x.fillRect(W-tw-12,H-18,tw+12,18);x.fillStyle='#4E5A75';x.textAlign='right';x.textBaseline='middle';x.fillText(t,W-6,H-9)}
+  try{return c.toDataURL('image/jpeg',.85)}catch(e){return ''}
 }
 
 /* ---- 5 앨범 ---- */
@@ -1068,7 +1195,7 @@ function rMoney(v){
   v.innerHTML=chapHead('money','누가 얼마를 냈는지만 적으면, 누가 누구에게 얼마를 보내면 되는지 계산합니다. 준비 장의 예약 금액도 들어와요.')+`
     <div class="block"><h3>지출 적기</h3>
       <div class="row"><select class="sel" id="xD" style="width:auto" aria-label="날짜"><option value="">여행 전</option>${days().map(d=>`<option value="${d.i}" ${d.i===ti?'selected':''}>${d.i+1}일째</option>`).join('')}</select><select class="sel grow" id="xP" aria-label="낸 사람"><option value="">낸 사람</option>${ms.map(m=>`<option value="${m.id}" ${m.id===myId?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
-      <div class="row" style="margin-top:8px"><input class="in" type="number" inputmode="numeric" id="xA" placeholder="금액" style="width:130px" aria-label="금액"><input class="in grow" id="xM" placeholder="무엇에 (예: 점심 흑돼지)" aria-label="내용"></div>
+      <div class="row" style="margin-top:8px"><input class="in" type="number" inputmode="numeric" id="xA" placeholder="금액" style="width:130px" aria-label="금액"><input class="in grow" id="xM" placeholder="무엇에 (예: 점심 In-N-Out)" aria-label="내용"></div>
       <p class="small muted" style="margin:12px 0 6px">함께 낼 사람</p>
       <div class="row">${ms.map(m=>`<label class="chk"><input type="checkbox" class="xS" value="${m.id}" checked>${face(m,22)}${esc(m.name)}</label>`).join('')}</div>
       <div class="sp"></div><button class="btn" id="xGo">지출 추가</button></div>
@@ -1209,7 +1336,12 @@ async function buildBook({embed=true,onp=()=>{}}={}){
     ${checks.length?`<h3 class="h3">챙긴 것</h3><ul class="cks">${checks.map(c=>`<li>${c.done?'☑':'☐'} ${esc(c.text)}${c.who?` <small>${nm(c.who)}</small>`:''}</li>`).join('')}</ul>`:''}</section>`;
   b+=`<section>${chap(3,'계획')}${ds.map(d=>{const its=all('plan').filter(p=>p.day===d.i).sort((a,c)=>(a.time||'99').localeCompare(c.time||'99'));const th=one('theme','d'+d.i)?.text;if(!its.length&&!th)return'';return dh(d.i)+(th?`<p class="theme">${esc(th)}</p>`:'')+`<ol class="tl">${its.map(i=>{const vs=all('vote').filter(x=>x.item===i.id&&x.on).map(x=>nameOf(x.member));return `<li><span class="t">${esc(i.time||'')}</span><div><b>${esc(i.place)}</b>${i.note?`<p>${esc(i.note)}</p>`:''}${vs.length?`<p class="vs">가고 싶어한 사람: ${vs.map(esc).join(', ')}</p>`:''}</div></li>`}).join('')}</ol>`}).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const lg={};logs.forEach(l=>(lg[l.day]=lg[l.day]||[]).push(l));
-  b+=`<section>${chap(4,'여행 일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')} ${l.weather||''}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
+  const LL=locs(),lmap={},limg={};LL.forEach(l=>{if(l.day!=null)(lmap[l.day]=lmap[l.day]||[]).push(l)});
+  Object.keys(lmap).forEach(d=>{if(!lg[d])lg[d]=[]});
+  let mi=0;const mk=Object.keys(lmap);
+  for(const d of mk){mi++;onp(.92+.06*mi/mk.length,`지도 그리는 중 ${mi}/${mk.length}`);limg[d]=await staticMap(lmap[d])}
+  const routeBlock=d=>{const arr=lmap[d];if(!arr)return'';return `<div class="route">${limg[d]?`<img src="${limg[d]}" alt="${Number(d)+1}일째 경로">`:''}<ol>${arr.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`};
+  b+=`<section>${chap(4,'여행 일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+routeBlock(d)+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')} ${l.weather||''}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const ab={};ph.forEach(p=>(ab[p.day??'x']=ab[p.day??'x']||[]).push(p));
   b+=`<section>${chap(5,'앨범')}${Object.keys(ab).sort((a,c)=>(a==='x')-(c==='x')||a-c).map(k=>(k==='x'?'<div class="dh"><b>그 밖의 순간들</b></div>':dh(Number(k)))+`<div class="grid album">${ab[k].map(fig).join('')}</div>`).join('')||'<p class="no">사진이 없어요</p>'}</section>`;
   b+=`<section>${chap(6,'소회')}${ms.map(x=>{const r=one('refl',x.id)||{};const qs=REFLQ.filter(([k])=>r[k]);return `<article class="rf"><div class="rh">${F(x,52)}<h3>${esc(x.name)}</h3></div>${qs.length?qs.map(([k,q])=>`<h4>${q}</h4><p>${esc(r[k])}</p>`).join(''):'<p class="no">쓰지 않았어요</p>'}</article>`}).join('')}</section>`;
@@ -1243,6 +1375,7 @@ figure{margin:0;break-inside:avoid}figure img{width:100%;aspect-ratio:4/5;object
 .rf{padding:22px 0;border-bottom:1px solid #E9EDF4;break-inside:avoid}.rh{display:flex;align-items:center;gap:12px;margin-bottom:6px}.rh h3{font-size:24px}.rf h4{font-size:14px;color:#2340E0;margin:16px 0 4px}.rf p{white-space:pre-wrap;font-size:16px;line-height:1.8}
 .tot b{font-size:40px;letter-spacing:-.04em}.tot span{color:#4E5A75}.xf{list-style:none;padding:0}.xf li{padding:8px 0;border-bottom:1px solid #E9EDF4}.xf b{background:linear-gradient(transparent 58%,#FFE45C 58%,#FFE45C 92%,transparent 92%)}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:8px 4px;border-bottom:1px solid #E9EDF4;text-align:left}th{font-size:13px;color:#8A93A8;font-weight:600}.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.route{margin:8px 0 18px;break-inside:avoid}.route img{width:100%;border-radius:14px;display:block}.route ol{columns:2;font-size:14px;padding-left:22px;margin:10px 0 0;color:#4E5A75}.route ol b{color:#14213D;font-variant-numeric:tabular-nums}.route small{color:#8A93A8}
 .no{color:#8A93A8}.colo{margin-top:48px;text-align:center;color:#8A93A8;font-size:14px}
 .pbtn{position:fixed;right:16px;bottom:16px;background:#2340E0;color:#fff;border:0;border-radius:12px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}
 @media print{body{background:#fff;padding:0}section{max-width:none;margin:0;border-radius:0;padding:24px 8px;break-before:page}section.cover{break-before:auto}.pbtn{display:none}}
