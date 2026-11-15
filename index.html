@@ -311,9 +311,9 @@ const CHAPS=[
   {k:'prep',n:2,t:'준비'},
   {k:'plan',n:3,t:'계획'},
   {k:'log',n:4,t:'여행 일기'},
-  {k:'map',t:'위치 기록'},
-  {k:'album',n:5,t:'앨범'},
-  {k:'refl',n:6,t:'소회'},
+  {k:'map',n:5,t:'위치 기록'},
+  {k:'album',n:6,t:'앨범'},
+  {k:'refl',n:7,t:'소회'},
   {k:'money',t:'정산'},
   {k:'book',t:'책 만들기'}
 ];
@@ -858,9 +858,9 @@ function rCover(v){
     ['prep',2,'준비',prep.length?`예약 ${prep.length}건 중 ${prep.filter(p=>p.status==='done').length}건 확정`:'예약 카드 없음'],
     ['plan',3,'계획',plans.length?`일정 ${plans.length}개`:'일정 없음'],
     ['log',4,'여행 일기',logs.length?`${logs.length}편`:'여행 중에 써요'],
-    ['map',null,'위치 기록',all('loc').length?`${all('loc').length}곳`:'여행 중에 기록해요'],
-    ['album',5,'앨범',ph.length?`사진 ${ph.length}장`:'사진 없음'],
-    ['refl',6,'소회',`${refl.length}/${ms.length||0}명 작성`],
+    ['map',5,'위치 기록',all('loc').length?`${all('loc').length}곳`:'여행 중에 기록해요'],
+    ['album',6,'앨범',ph.length?`사진 ${ph.length}장`:'사진 없음'],
+    ['refl',7,'소회',`${refl.length}/${ms.length||0}명 작성`],
     ['money',null,'정산',ex.length?won(ex.reduce((s,e)=>s+e.amount,0)):'지출 없음']
   ];
   v.innerHTML=`${a2hsCard()}
@@ -1355,14 +1355,15 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   b+=`<section>${chap(3,'계획')}${ds.map(d=>{const its=all('plan').filter(p=>p.day===d.i).sort((a,c)=>(a.time||'99').localeCompare(c.time||'99'));const th=one('theme','d'+d.i)?.text;if(!its.length&&!th)return'';return dh(d.i)+(th?`<p class="theme">${esc(th)}</p>`:'')+`<ol class="tl">${its.map(i=>{const vs=all('vote').filter(x=>x.item===i.id&&x.on).map(x=>nameOf(x.member));return `<li><span class="t">${esc(i.time||'')}</span><div><b>${esc(i.place)}</b>${i.note?`<p>${esc(i.note)}</p>`:''}${vs.length?`<p class="vs">가고 싶어한 사람: ${vs.map(esc).join(', ')}</p>`:''}</div></li>`}).join('')}</ol>`}).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const lg={};logs.forEach(l=>(lg[l.day]=lg[l.day]||[]).push(l));
   const LL=locs(),lmap={},limg={};LL.forEach(l=>{if(l.day!=null)(lmap[l.day]=lmap[l.day]||[]).push(l)});
-  Object.keys(lmap).forEach(d=>{if(!lg[d])lg[d]=[]});
   let mi=0;const mk=Object.keys(lmap);
   for(const d of mk){mi++;onp(.92+.06*mi/mk.length,`지도 그리는 중 ${mi}/${mk.length}`);limg[d]=await staticMap(lmap[d])}
   const routeBlock=d=>{const arr=lmap[d];if(!arr)return'';return `<div class="route">${limg[d]?`<img src="${limg[d]}" alt="${Number(d)+1}일째 경로">`:''}<ol>${arr.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`};
-  b+=`<section>${chap(4,'여행 일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+routeBlock(d)+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')} ${l.weather||''}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
+  b+=`<section>${chap(4,'여행 일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')} ${l.weather||''}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const ab={};ph.forEach(p=>(ab[p.day??'x']=ab[p.day??'x']||[]).push(p));
-  b+=`<section>${chap(5,'앨범')}${Object.keys(ab).sort((a,c)=>(a==='x')-(c==='x')||a-c).map(k=>(k==='x'?'<div class="dh"><b>그 밖의 순간들</b></div>':dh(Number(k)))+`<div class="grid album">${ab[k].map(fig).join('')}</div>`).join('')||'<p class="no">사진이 없어요</p>'}</section>`;
-  b+=`<section>${chap(6,'소회')}${ms.map(x=>{const r=one('refl',x.id)||{};const qs=REFLQ.filter(([k])=>r[k]);return `<article class="rf"><div class="rh">${F(x,52)}<h3>${esc(x.name)}</h3></div>${qs.length?qs.map(([k,q])=>`<h4>${q}</h4><p>${esc(r[k])}</p>`).join(''):'<p class="no">쓰지 않았어요</p>'}</article>`}).join('')}</section>`;
+  const lx=LL.filter(l=>l.day==null);
+  b+=`<section>${chap(5,'위치 기록')}${Object.keys(lmap).sort((a,c)=>a-c).map(d=>dh(Number(d))+routeBlock(d)).join('')}${lx.length?`<div class="dh"><b>여행 날짜 밖</b></div><div class="route"><ol>${lx.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`:''}${LL.length?'':'<p class="no">기록이 없어요</p>'}</section>`;
+  b+=`<section>${chap(6,'앨범')}${Object.keys(ab).sort((a,c)=>(a==='x')-(c==='x')||a-c).map(k=>(k==='x'?'<div class="dh"><b>그 밖의 순간들</b></div>':dh(Number(k)))+`<div class="grid album">${ab[k].map(fig).join('')}</div>`).join('')||'<p class="no">사진이 없어요</p>'}</section>`;
+  b+=`<section>${chap(7,'소회')}${ms.map(x=>{const r=one('refl',x.id)||{};const qs=REFLQ.filter(([k])=>r[k]);return `<article class="rf"><div class="rh">${F(x,52)}<h3>${esc(x.name)}</h3></div>${qs.length?qs.map(([k,q])=>`<h4>${q}</h4><p>${esc(r[k])}</p>`).join(''):'<p class="no">쓰지 않았어요</p>'}</article>`}).join('')}</section>`;
   b+=`<section>${chap('','정산')}<p class="tot"><b>${won(total)}</b> ${ms.length?`<span>한 사람당 평균 ${won(total/ms.length)}</span>`:''}</p>
     ${tr.length?`<h3 class="h3">보낸 돈</h3><ul class="xf">${tr.map(t=>`<li>${nm(t.from)} → ${nm(t.to)} <b>${won(t.amt)}</b></li>`).join('')}</ul>`:''}
     <h3 class="h3">사람별</h3><table><tr><th>이름</th><th class="n">낸 돈</th><th class="n">내 몫</th><th class="n">차이</th></tr>${ms.map(x=>{const paid=ex.filter(e=>e.payer===x.id).reduce((s,e)=>s+e.amount,0),bb=bal[x.id]||0;return `<tr><td>${esc(x.name)}</td><td class="n">${won(paid)}</td><td class="n">${won(paid-bb)}</td><td class="n">${bb>=0?'+':''}${won(bb)}</td></tr>`}).join('')}</table>
