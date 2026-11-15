@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#ffffff">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="여행모아">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>우리 여행책</title>
 <style>
 :root{
@@ -526,8 +533,11 @@ function rWelcome(){
     <p class="lead">여럿이 한 칸씩 채우면 표지부터 소회까지 한 권이 됩니다. 다 쓰면 파일로 내려받고 온라인 기록은 지웁니다.</p>
     <button class="choice" id="goSetup"><div><b>함께 쓸 여행 만들기</b><span>총무가 한 번만 설정하면, 참가자는 초대 링크만 열면 됩니다</span></div><span aria-hidden="true" style="font-size:22px">›</span></button>
     <button class="choice" id="goLocal"><div><b>이 기기에서 먼저 둘러보기</b><span>나만 보이는 체험용. 나중에 함께 쓰는 여행으로 옮길 수 있어요</span></div><span aria-hidden="true" style="font-size:22px">›</span></button>
-    <p class="small muted" style="margin-top:18px">초대 링크를 받으셨다면 그 링크를 다시 눌러 열어 주세요.</p>
+    <hr class="rule">
+    <label class="lab" for="wLink" style="margin-top:0">초대 링크를 받으셨나요?</label>
+    <div class="row"><input class="in grow" id="wLink" placeholder="받은 초대 링크를 여기에 붙여넣기" autocomplete="off"><button class="btn line" id="wGoLink">들어가기</button></div>
   </main>`;
+  $('#wGoLink').onclick=()=>{const j=parseJoin($('#wLink').value.trim());if(!j){toast('초대 링크가 맞는지 확인해 주세요');return}LS.set('tb.join',j);boot()};
   $('#goLocal').onclick=async()=>{cfg={mode:'local'};LS.set('tb.cfg',cfg);await boot()};
   $('#goSetup').onclick=()=>rSetup();
 }
@@ -637,20 +647,27 @@ function rSetup(){
     LS.set('tb.owner.'+nc.trip,true);
     const me=LS.get('tb.me.local');if(me&&$('#sMove')?.checked)LS.set('tb.me.'+nc.trip,me);
     cfg=nc;LS.set('tb.cfg',cfg);rows.clear();
-    await boot();view='share';history.replaceState(null,'','#share');render();
+    await boot();view='share';history.replaceState(null,'','#share');keepJoinInUrl();render();
   };
 }
 
 /* 초대 링크에는 저장 공간 주소와 공개 키, 여행별 소금(salt)만 들어간다. 비밀번호 없이는 아무것도 열 수 없다 */
-function inviteLink(){
-  const p=btoa(unescape(encodeURIComponent(JSON.stringify({u:cfg.url,k:cfg.key,s:cfg.salt,n:meta().title||cfg.title||''})))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  return location.origin+location.pathname+'#join='+p;
+function joinParam(){return btoa(unescape(encodeURIComponent(JSON.stringify({u:cfg.url,k:cfg.key,s:cfg.salt,n:meta().title||cfg.title||''})))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function inviteLink(){return location.origin+location.pathname+'?j='+joinParam()}
+/* 초대 정보를 주소창(?j=)에 남겨 둔다: 아이폰 '홈 화면에 추가'는 저장소가 따로라서, 홈 화면 앱이 이 주소로 열리면 비밀번호만 다시 물어본다 */
+function keepJoinInUrl(){if(cfg?.mode==='remote'){try{history.replaceState(null,'',location.pathname+'?j='+joinParam()+location.hash)}catch(e){}}}
+function clearJoinFromUrl(){try{history.replaceState(null,'',location.pathname)}catch(e){}}
+function parseJoin(str){
+  const m=String(str||'').match(/[?&#]j(?:oin)?=([A-Za-z0-9_\-]+)/)||String(str||'').match(/#join=([A-Za-z0-9_\-]+)/);if(!m)return null;
+  try{const x=m[1].replace(/-/g,'+').replace(/_/g,'/');const o=JSON.parse(decodeURIComponent(escape(atob(x+'==='.slice((x.length+3)%4)))));if(o.u&&o.k&&o.s)return{url:o.u,key:o.k,salt:o.s,title:o.n||''}}catch(e){console.warn(e)}
+  return null;
 }
 function readJoin(){
-  const h=location.hash;if(!h.startsWith('#join='))return false;
-  try{const x=h.slice(6).replace(/-/g,'+').replace(/_/g,'/');const o=JSON.parse(decodeURIComponent(escape(atob(x+'==='.slice((x.length+3)%4)))));
-    if(o.u&&o.k&&o.s)LS.set('tb.join',{url:o.u,key:o.k,salt:o.s,title:o.n||''})}catch(e){console.warn(e)}
-  history.replaceState(null,'',location.pathname);view='cover';return true;
+  const j=parseJoin(location.search)||parseJoin(location.hash);if(!j)return false;
+  const cur=LS.get('tb.cfg');
+  if(!(cur&&cur.mode==='remote'&&cur.salt===j.salt))LS.set('tb.join',j);
+  if(location.hash.startsWith('#join=')){try{history.replaceState(null,'',location.pathname+'?'+location.hash.slice(1).replace(/^join=/,'j='))}catch(e){}view='cover'}
+  return true;
 }
 function rJoin(j){
   $('#root').innerHTML=`<main class="welcome">
@@ -671,7 +688,7 @@ function rJoin(j){
       const nc={mode:'remote',url:j.url,key:j.key,salt:j.salt,title:j.title,...(await deriveTrip(pw,j.salt))};
       const ok=await RemoteBackend(nc).hasTrip();
       if(!ok){msg.textContent='비밀번호가 맞지 않아요. 총무에게 다시 확인해 주세요.';$('#jGo').disabled=false;$('#jPw').select();return}
-      cfg=nc;LS.set('tb.cfg',cfg);LS.del('tb.join');await boot();
+      cfg=nc;LS.set('tb.cfg',cfg);LS.del('tb.join');await boot();keepJoinInUrl();
     }catch(err){console.warn(err);msg.textContent='연결하지 못했어요. 인터넷 연결을 확인해 주세요.';$('#jGo').disabled=false}
   };
 }
@@ -1004,7 +1021,7 @@ function rShare(v){
     <div class="note">Supabase 무료 프로젝트는 7일 동안 아무도 쓰지 않으면 잠시 멈춥니다. 그럴 땐 총무가 Supabase 화면에서 Restore를 한 번 누르면 다시 열려요.</div>
     <hr class="rule"><button class="btn quiet sm" id="leave">이 기기에서 나가기</button><p class="small faint" style="margin-top:6px">다른 사람과 같이 쓰는 기기라면 눌러 주세요. 다시 들어오려면 링크와 비밀번호가 필요해요.</p>`;
   $('#cpL').onclick=()=>copyText(link);
-  $('#leave').onclick=()=>ask('이 기기에서 나갈까요?','나가기',()=>{clearInterval(syncTimer);LS.del('tb.cache.'+cfg.trip);LS.del('tb.cfg');cfg=null;rows.clear();$('#root').innerHTML='';location.hash='';render()},false);
+  $('#leave').onclick=()=>ask('이 기기에서 나갈까요?','나가기',()=>{clearInterval(syncTimer);LS.del('tb.cache.'+cfg.trip);LS.del('tb.cfg');cfg=null;rows.clear();$('#root').innerHTML='';clearJoinFromUrl();render()},false);
 }
 
 /* ---- 책 만들기 ---- */
@@ -1038,7 +1055,7 @@ function wipeRemote(){
       LS.del(outboxKey());LS.del('tb.cache.'+cfg.trip);
       $('#modal .sheet').innerHTML=`<h2>모두 지웠어요</h2><p class="muted" style="margin:10px 0 16px">이 여행의 글${res.removed>=res.photos?'과 사진':''}이 Supabase에서 지워졌습니다.${res.removed<res.photos?` 사진 ${res.photos-res.removed}장은 지우지 못했어요. 아래처럼 프로젝트를 지우면 함께 사라집니다.`:''} 남은 흔적까지 정리하려면 Supabase의 SQL Editor에서 아래 코드를 실행하고, Storage 메뉴에서 tripbook 보관함을 지워 주세요. 이 여행에만 쓴 프로젝트라면 Project Settings › General 맨 아래 Delete project로 프로젝트를 통째로 지워도 됩니다.</p><pre class="code">${esc(CLEAN_SQL)}</pre><div class="sp"></div><div class="row"><button class="btn line" id="wCp">코드 복사</button><button class="btn grow" id="wDone">처음 화면으로</button></div>`;
       $('#wCp').onclick=()=>copyText(CLEAN_SQL);
-      $('#wDone').onclick=()=>{LS.del('tb.cfg');cfg=null;rows.clear();closeSheet();$('#root').innerHTML='';location.hash='';render()};
+      $('#wDone').onclick=()=>{LS.del('tb.cfg');cfg=null;rows.clear();closeSheet();$('#root').innerHTML='';clearJoinFromUrl();render()};
     }catch(e){$('#wGo').disabled=false;on(0,'일부를 지우지 못했어요: '+e.message+' 다시 눌러 주세요.')}
   };
 }
@@ -1135,6 +1152,7 @@ async function boot(){
     try{(await BE.load()).forEach(r=>rows.set(r.k,r))}catch(e){toast('이 브라우저는 기기 저장을 지원하지 않아요')}
   }
   myId=LS.get('tb.me.'+(cfg.trip||'local'));
+  if(cfg.mode==='remote'&&!location.search.includes('j='))keepJoinInUrl();
   try{navigator.storage?.persist?.()}catch(e){}
   $('#root').innerHTML='';render();
 }
