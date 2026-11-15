@@ -322,7 +322,13 @@ const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=(n=10)=>{const a='abcdefghijkmnpqrstuvwxyz23456789';let s='';const r=crypto.getRandomValues(new Uint8Array(n));for(const x of r)s+=a[x%a.length];return s};
-const won=n=>(Math.round(n)||0).toLocaleString('ko-KR')+'원';
+const CURRENCIES=[['USD','미국 달러'],['CAD','캐나다 달러'],['KRW','한국 원'],['EUR','유로'],['GBP','영국 파운드'],['JPY','일본 엔'],['MXN','멕시코 페소'],['AUD','호주 달러']];
+const curCode=()=>{const c=(typeof meta==='function'&&meta().currency)||'USD';return CURRENCIES.some(x=>x[0]===c)?c:'USD'};
+const curDigits=()=>{try{return new Intl.NumberFormat('en',{style:'currency',currency:curCode()}).resolvedOptions().maximumFractionDigits}catch(e){return 2}};
+const roundCur=n=>{const k=Math.pow(10,curDigits());return Math.round((Number(n)||0)*k)/k};
+const curSymbol=()=>{try{return new Intl.NumberFormat('ko-KR',{style:'currency',currency:curCode()}).formatToParts(0).find(x=>x.type==='currency').value}catch(e){return curCode()}};
+const won=n=>{const d=curDigits();try{return new Intl.NumberFormat('ko-KR',{style:'currency',currency:curCode(),minimumFractionDigits:d,maximumFractionDigits:d}).format(roundCur(n))}catch(e){return roundCur(n).toLocaleString('ko-KR')+' '+curCode()}};
+const curSelect=(id)=>`<select class="sel" id="${id}" data-f="trip/meta/currency" data-rerender="1" aria-label="통화">${CURRENCIES.map(([c,n])=>{let sym=c;try{sym=new Intl.NumberFormat('ko-KR',{style:'currency',currency:c}).formatToParts(0).find(x=>x.type==='currency').value}catch(e){}return `<option value="${c}" ${curCode()===c?'selected':''}>${n} (${sym})</option>`}).join('')}</select>`;
 const LS={get(k,d=null){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 function toast(m,ms=2400){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms)}
 
@@ -878,6 +884,8 @@ function rCover(v){
       <h3>여행 정보</h3>
       <label class="lab" for="fT">여행 제목</label><input class="in" id="fT" data-f="trip/meta/title" value="${esc(m.title||'')}" placeholder="예: 여섯이서 요세미티">
       <label class="lab" for="fS">한 줄 소개</label><input class="in" id="fS" data-f="trip/meta/sub" value="${esc(m.sub||'')}" placeholder="예: 대학 동기 여섯, 십 년 만의 로드트립">
+      <label class="lab" for="fCur">정산 통화</label>${curSelect('fCur')}
+      <p class="small faint" style="margin-top:4px">통화를 바꿔도 이미 적은 금액은 환율로 바뀌지 않고 표시만 바뀌어요.</p>
       <label class="lab" for="fP">여행지</label><input class="in" id="fP" data-f="trip/meta/place" value="${esc(m.place||'')}" placeholder="예: Yosemite National Park">
       <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="fA">출발일</label><input class="in" type="date" id="fA" data-f="trip/meta/start" data-rerender="1" value="${esc(m.start||'')}"></div>
       <div class="grow"><label class="lab" for="fB">돌아오는 날</label><input class="in" type="date" id="fB" data-f="trip/meta/end" data-rerender="1" value="${esc(m.end||'')}"></div></div>
@@ -980,7 +988,7 @@ function editPrep(id,type){
   const ph={stay:'예: Yosemite Valley Lodge 2박',flight:'예: JFK → SFO UA 1234 08:30',car:'예: Chevy Suburban 4일 (SFO 픽업)',etc:'예: 국립공원 연간 패스'}[p.type]||'';
   openSheet(`<h2>${PREP[p.type]||'기타'}</h2>
     <label class="lab" for="qT">무엇을 예약했나요</label><input class="in" id="qT" value="${esc(p.title||'')}" placeholder="${ph}">
-    <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qD">날짜</label><input class="in" type="date" id="qD" value="${esc(p.date||'')}"></div><div class="grow"><label class="lab" for="qC">금액(원)</label><input class="in" type="number" inputmode="numeric" id="qC" value="${esc(p.cost||'')}"></div></div>
+    <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qD">날짜</label><input class="in" type="date" id="qD" value="${esc(p.date||'')}"></div><div class="grow"><label class="lab" for="qC">금액</label><input class="in" type="number" inputmode="numeric" id="qC" value="${esc(p.cost||'')}" step="${curDigits()?'0.01':'1'}" inputmode="${curDigits()?'decimal':'numeric'}" placeholder="${esc(curSymbol())}"></div></div>
     <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qP">결제한 사람</label><select class="sel" id="qP"><option value="">-</option>${members().map(m=>`<option value="${m.id}" ${p.payer===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div class="grow"><label class="lab">상태</label><div class="seg" id="qS">${[['none','미정'],['wait','대기'],['done','확정']].map(([k,t])=>`<button data-s="${k}" class="${(p.status||'none')===k?'on':''}">${t}</button>`).join('')}</div></div></div>
     <label class="lab" for="qK">예약번호</label><input class="in" id="qK" value="${esc(p.code||'')}">
@@ -1184,18 +1192,27 @@ function expenseRows(){
   return [...fromPrep,...ex].sort((a,b)=>((a.day??-1)-(b.day??-1))||((a.created||0)-(b.created||0)));
 }
 function settle(){
-  const bal={};members().forEach(m=>bal[m.id]=0);
-  expenseRows().forEach(e=>{if(!(e.payer in bal))return;bal[e.payer]+=e.amount;const sh=e.amount/e.split.length;e.split.forEach(s=>bal[s]-=sh)});
-  const d=Object.entries(bal).filter(x=>x[1]<-.5).sort((a,b)=>a[1]-b[1]).map(x=>[...x]),c=Object.entries(bal).filter(x=>x[1]>.5).sort((a,b)=>b[1]-a[1]).map(x=>[...x]);
-  const tr=[];let i=0,j=0;while(i<d.length&&j<c.length){const a=Math.min(-d[i][1],c[j][1]);tr.push({from:d[i][0],to:c[j][0],amt:Math.round(a)});d[i][1]+=a;c[j][1]-=a;if(d[i][1]>-.5)i++;if(c[j][1]<.5)j++}
+  /* 통화의 가장 작은 단위(센트, 원)로 정수 계산: 나머지는 한 사람씩 1단위씩 나눠서 합이 정확히 맞게 */
+  const k=Math.pow(10,curDigits()),bal={},owe={};members().forEach(m=>{bal[m.id]=0;owe[m.id]=0});
+  let total=0;
+  expenseRows().forEach(e=>{if(!(e.payer in bal))return;const tot=Math.round((Number(e.amount)||0)*k);const sp=e.split.filter(x=>x in bal);if(!sp.length)return;
+    bal[e.payer]+=tot;total+=tot;sp.forEach(x=>owe[x]+=tot/sp.length)});
+  /* 각자 몫을 여행 전체로 모아서 반올림: 남는 단위는 소수점이 큰 사람부터 1씩 (합이 정확히 맞고, 몫 차이는 최대 1단위) */
+  const ids=Object.keys(owe);const fl={};let rest=total;ids.forEach(x=>{fl[x]=Math.floor(owe[x]+1e-9);rest-=fl[x]});
+  ids.slice().sort((a,b)=>(owe[b]-fl[b])-(owe[a]-fl[a])||(a<b?-1:1)).forEach(x=>{if(rest>0){fl[x]++;rest--}});
+  ids.forEach(x=>bal[x]-=fl[x]);
+  const d=Object.entries(bal).filter(x=>x[1]<0).sort((a,b)=>a[1]-b[1]).map(x=>[...x]),c=Object.entries(bal).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).map(x=>[...x]);
+  const tr=[];let i=0,j=0;while(i<d.length&&j<c.length){const a=Math.min(-d[i][1],c[j][1]);tr.push({from:d[i][0],to:c[j][0],amt:a/k});d[i][1]+=a;c[j][1]-=a;if(d[i][1]===0)i++;if(c[j][1]===0)j++}
+  Object.keys(bal).forEach(x=>bal[x]=bal[x]/k);
   return{bal,tr};
 }
 function rMoney(v){
   const ms=members(),rows_=expenseRows(),{bal,tr}=settle(),total=rows_.reduce((s,e)=>s+e.amount,0),ti=todayIdx();
-  v.innerHTML=chapHead('money','누가 얼마를 냈는지만 적으면, 누가 누구에게 얼마를 보내면 되는지 계산합니다. 준비 장의 예약 금액도 들어와요.')+`
+  const curBlock=`<div class="row" style="margin:-6px 0 14px"><label class="small muted" for="mCur">정산 통화</label><div style="flex:0 0 auto">${curSelect('mCur')}</div></div>`;
+  v.innerHTML=chapHead('money','누가 얼마를 냈는지만 적으면, 누가 누구에게 얼마를 보내면 되는지 계산합니다. 준비 장의 예약 금액도 들어와요.')+curBlock+`
     <div class="block"><h3>지출 적기</h3>
       <div class="row"><select class="sel" id="xD" style="width:auto" aria-label="날짜"><option value="">여행 전</option>${days().map(d=>`<option value="${d.i}" ${d.i===ti?'selected':''}>${d.i+1}일째</option>`).join('')}</select><select class="sel grow" id="xP" aria-label="낸 사람"><option value="">낸 사람</option>${ms.map(m=>`<option value="${m.id}" ${m.id===myId?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
-      <div class="row" style="margin-top:8px"><input class="in" type="number" inputmode="numeric" id="xA" placeholder="금액" style="width:130px" aria-label="금액"><input class="in grow" id="xM" placeholder="무엇에 (예: 점심 In-N-Out)" aria-label="내용"></div>
+      <div class="row" style="margin-top:8px"><input class="in" type="number" inputmode="${curDigits()?'decimal':'numeric'}" step="${curDigits()?'0.01':'1'}" id="xA" placeholder="금액 (${esc(curSymbol())})" style="width:140px" aria-label="금액"><input class="in grow" id="xM" placeholder="무엇에 (예: 점심 In-N-Out)" aria-label="내용"></div>
       <p class="small muted" style="margin:12px 0 6px">함께 낼 사람</p>
       <div class="row">${ms.map(m=>`<label class="chk"><input type="checkbox" class="xS" value="${m.id}" checked>${face(m,22)}${esc(m.name)}</label>`).join('')}</div>
       <div class="sp"></div><button class="btn" id="xGo">지출 추가</button></div>
@@ -1210,6 +1227,7 @@ function rMoney(v){
     const split=$$('.xS:checked',v).map(c=>c.value);if(!split.length){toast('함께 낼 사람을 한 명 이상 골라 주세요');return}
     const d=$('#xD').value;put('expense',uid(8),{day:d===''?null:Number(d),payer,amount,memo:$('#xM').value.trim(),split,created:Date.now()})};
   $$('[data-xx]',v).forEach(b=>b.onclick=()=>remove('expense',b.dataset.xx));
+  bindAuto(v);
 }
 
 /* ---- 내 이름 메뉴: 이름 바꾸기 / 총무 되기 / 나가기 ---- */
