@@ -331,35 +331,35 @@ function RemoteBackend(cfg){
   const toRow=x=>({k:x.col+':'+x.id,col:x.col,id:x.id,data:x.data||{},t:Number(x.updated_at)||0,del:!!x.deleted,s:Date.parse(x.server_at)||0});
   return {
     kind:'remote',cfg,
-    async ping(){await rq(`/rest/v1/records?select=id&limit=1`);return true},
-    async hasTrip(){const r=await rq(`/rest/v1/records?select=id&trip=eq.${trip}&col=eq.trip&id=eq.meta`);return (await r.json()).length>0},
+    async ping(){await rq(`/rest/v1/tripbook_records?select=id&limit=1`);return true},
+    async hasTrip(){const r=await rq(`/rest/v1/tripbook_records?select=id&trip=eq.${trip}&col=eq.trip&id=eq.meta`);return (await r.json()).length>0},
     async load(){
       const out=[];for(let off=0;;off+=1000){
-        const r=await rq(`/rest/v1/records?select=*&trip=eq.${trip}&order=server_at.asc&limit=1000&offset=${off}`);
+        const r=await rq(`/rest/v1/tripbook_records?select=*&trip=eq.${trip}&order=server_at.asc&limit=1000&offset=${off}`);
         const a=await r.json();out.push(...a.map(toRow));if(a.length<1000)break;
       }return out;
     },
     async since(ms){
       const iso=new Date(Math.max(0,ms-8000)).toISOString();
-      const r=await rq(`/rest/v1/records?select=*&trip=eq.${trip}&server_at=gt.${encodeURIComponent(iso)}&order=server_at.asc&limit=1000`);
+      const r=await rq(`/rest/v1/tripbook_records?select=*&trip=eq.${trip}&server_at=gt.${encodeURIComponent(iso)}&order=server_at.asc&limit=1000`);
       return (await r.json()).map(toRow);
     },
     async upsert(rows){
       if(!rows.length)return;
-      await rq(`/rest/v1/records?on_conflict=trip,col,id`,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows.map(r=>({trip,col:r.col,id:r.id,data:r.data,updated_at:r.t,deleted:!!r.del})))});
+      await rq(`/rest/v1/tripbook_records?on_conflict=trip,col,id`,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows.map(r=>({trip,col:r.col,id:r.id,data:r.data,updated_at:r.t,deleted:!!r.del})))});
     },
-    async putBlob(path,blob){await rq(`/storage/v1/object/trip/${path}`,{method:'POST',headers:{'Content-Type':blob.type||'application/octet-stream','cache-control':'31536000'},body:blob})},
-    async delBlob(path){try{await rq(`/storage/v1/object/trip`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixes:[path]})})}catch(e){console.warn(e)}},
-    url(path){return path?`${base}/storage/v1/object/public/trip/${path}`:''},
+    async putBlob(path,blob){await rq(`/storage/v1/object/tripbook/${path}`,{method:'POST',headers:{'Content-Type':blob.type||'application/octet-stream','cache-control':'31536000'},body:blob})},
+    async delBlob(path){try{await rq(`/storage/v1/object/tripbook`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixes:[path]})})}catch(e){console.warn(e)}},
+    url(path){return path?`${base}/storage/v1/object/public/tripbook/${path}`:''},
     async getBlob(path){const r=await fetch(this.url(path));if(!r.ok)throw new Error('사진을 받지 못했어요');return r.blob()},
     async wipe(paths,onp=()=>{}){
       let removed=0;
       for(let i=0;i<paths.length;i+=100){
         const part=paths.slice(i,i+100);
-        try{const r=await rq(`/storage/v1/object/trip`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixes:part})});const a=await r.json().catch(()=>[]);removed+=Array.isArray(a)?a.length:0}catch(e){console.warn(e)}
+        try{const r=await rq(`/storage/v1/object/tripbook`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixes:part})});const a=await r.json().catch(()=>[]);removed+=Array.isArray(a)?a.length:0}catch(e){console.warn(e)}
         onp(.1+.6*Math.min(1,(i+100)/paths.length),`사진 ${Math.min(paths.length,i+100)}/${paths.length}장 삭제`);
       }
-      await rq(`/rest/v1/records?trip=eq.${trip}`,{method:'DELETE',headers:{Prefer:'return=minimal'}});
+      await rq(`/rest/v1/tripbook_records?trip=eq.${trip}`,{method:'DELETE',headers:{Prefer:'return=minimal'}});
       onp(1,'모두 삭제했어요');
       return {photos:paths.length,removed};
     }
@@ -559,8 +559,9 @@ function rWelcome(){
 }
 
 const SQL=`-- 우리 여행책: Supabase SQL Editor에 붙여넣고 Run
--- 글: 비밀번호에서 만든 열쇠(x-trip-key)가 맞아야만 읽고 쓸 수 있음
-create table if not exists public.records (
+-- 이미 쓰고 있는 프로젝트에 넣어도 됩니다. 이름이 모두 tripbook_ 으로 시작해서
+-- 기존 표·사진 보관함·규칙은 건드리지 않습니다.
+create table if not exists public.tripbook_records (
   trip text not null,
   col text not null,
   id text not null,
@@ -570,39 +571,45 @@ create table if not exists public.records (
   server_at timestamptz not null default now(),
   primary key (trip, col, id)
 );
-create or replace function public.records_touch() returns trigger
+create or replace function public.tripbook_touch() returns trigger
 language plpgsql as $$ begin new.server_at := now(); return new; end $$;
-drop trigger if exists records_touch on public.records;
-create trigger records_touch before insert or update on public.records
-  for each row execute function public.records_touch();
+drop trigger if exists tripbook_touch on public.tripbook_records;
+create trigger tripbook_touch before insert or update on public.tripbook_records
+  for each row execute function public.tripbook_touch();
 
-create or replace function public.trip_key_hash(p text) returns text
+-- 비밀번호에서 만든 열쇠(x-trip-key)가 맞아야만 읽고 쓸 수 있음
+create or replace function public.tripbook_key_hash(p text) returns text
 language sql stable as $$
   select encode(sha256(convert_to(p || coalesce(current_setting('request.headers', true)::json ->> 'x-trip-key', ''), 'UTF8')), 'hex')
 $$;
 
-alter table public.records enable row level security;
-grant select, insert, update, delete on public.records to anon;
-drop policy if exists "trip_all" on public.records;
-drop policy if exists "trip_key" on public.records;
-create policy "trip_key" on public.records for all to anon
-  using (trip = public.trip_key_hash(''))
-  with check (trip = public.trip_key_hash(''));
+alter table public.tripbook_records enable row level security;
+grant select, insert, update, delete on public.tripbook_records to anon;
+drop policy if exists "tripbook_key" on public.tripbook_records;
+create policy "tripbook_key" on public.tripbook_records for all to anon
+  using (trip = public.tripbook_key_hash(''))
+  with check (trip = public.tripbook_key_hash(''));
 
 -- 사진: 비밀번호에서 만든 비밀 폴더에 저장. 목록 보기는 막음
-insert into storage.buckets (id, name, public) values ('trip', 'trip', true)
+insert into storage.buckets (id, name, public) values ('tripbook', 'tripbook', true)
   on conflict (id) do nothing;
-drop policy if exists "trip_read" on storage.objects;
-drop policy if exists "trip_write" on storage.objects;
-drop policy if exists "trip_update" on storage.objects;
-drop policy if exists "trip_delete" on storage.objects;
-drop policy if exists "trip_own" on storage.objects;
-create policy "trip_write" on storage.objects for insert to anon
-  with check (bucket_id = 'trip');
-create policy "trip_own" on storage.objects for select to anon
-  using (bucket_id = 'trip' and (storage.foldername(name))[1] = left(public.trip_key_hash('photo:'), 32));
-create policy "trip_delete" on storage.objects for delete to anon
-  using (bucket_id = 'trip' and (storage.foldername(name))[1] = left(public.trip_key_hash('photo:'), 32));`;
+drop policy if exists "tripbook_write" on storage.objects;
+drop policy if exists "tripbook_own" on storage.objects;
+drop policy if exists "tripbook_delete" on storage.objects;
+create policy "tripbook_write" on storage.objects for insert to anon
+  with check (bucket_id = 'tripbook');
+create policy "tripbook_own" on storage.objects for select to anon
+  using (bucket_id = 'tripbook' and (storage.foldername(name))[1] = left(public.tripbook_key_hash('photo:'), 32));
+create policy "tripbook_delete" on storage.objects for delete to anon
+  using (bucket_id = 'tripbook' and (storage.foldername(name))[1] = left(public.tripbook_key_hash('photo:'), 32));`;
+const CLEAN_SQL=`-- 우리 여행책 흔적 지우기 (책을 다 받은 뒤에만)
+drop table if exists public.tripbook_records;
+drop function if exists public.tripbook_touch();
+drop function if exists public.tripbook_key_hash(text);
+drop policy if exists "tripbook_write" on storage.objects;
+drop policy if exists "tripbook_own" on storage.objects;
+drop policy if exists "tripbook_delete" on storage.objects;
+-- 마지막으로 Storage 메뉴에서 tripbook 보관함을 지워 주세요.`;
 
 function rSetup(){
   const hasLocal=cfg?.mode==='local'&&rows.size>0;
@@ -610,7 +617,7 @@ function rSetup(){
     <button class="btn quiet sm" id="back">뒤로</button>
     <header class="chap-head plain" style="margin-top:18px"><h2>함께 쓸 여행 만들기</h2><p>총무 한 명만 하면 됩니다. Supabase(무료, 카드 불필요)에 우리 여행 전용 저장 공간을 만들어요. 10분 정도 걸립니다.</p></header>
     <ol class="steps">
-      <li><b>Supabase에 가입하고 프로젝트 만들기</b><p class="muted"><a class="link" href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com</a>에서 가입한 뒤 New project를 누릅니다. 이름은 아무거나, 지역은 Northeast Asia (Seoul)을 고르세요.</p></li>
+      <li><b>Supabase 프로젝트 정하기</b><p class="muted"><a class="link" href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com</a>에서 새 프로젝트를 만들거나, 이미 쓰고 있는 프로젝트를 그대로 써도 됩니다. 이 앱은 tripbook_ 으로 시작하는 표와 사진 보관함만 따로 만들어서 기존 내용과 섞이지 않아요.</p></li>
       <li><b>저장 공간 설정 코드 실행</b><p class="muted">왼쪽 메뉴의 SQL Editor를 열고, 아래 코드를 붙여넣은 다음 Run을 누릅니다.</p><div class="sp"></div><pre class="code">${esc(SQL)}</pre><div class="sp"></div><button class="btn line sm" id="cpSql">코드 복사</button></li>
       <li><b>주소와 키 복사</b><p class="muted">상단의 Connect 버튼(또는 Project Settings › API Keys)에서 Project URL과 anon(또는 publishable) 키를 복사합니다. secret 키는 쓰지 마세요.</p>
         <label class="lab" for="sUrl">Project URL</label><input class="in" id="sUrl" placeholder="https://abcdefgh.supabase.co" autocomplete="off">
@@ -638,7 +645,7 @@ function rSetup(){
     const salt=uid(16);let nc;
     try{nc={mode:'remote',url,key,salt,title:title||'우리 여행',...(await deriveTrip(pw,salt))}}catch(e){$('#sGo').disabled=false;msg.textContent=e.message;return}
     const be=RemoteBackend(nc);
-    try{await be.ping()}catch(e){$('#sGo').disabled=false;msg.innerHTML=`연결하지 못했어요. ${/404|relation|records|PGRST/.test(e.message)?'2단계 코드를 실행했는지 확인해 주세요.':'주소와 키를 다시 확인해 주세요.'}<br><span class="faint">${esc(e.message)}</span>`;return}
+    try{await be.ping()}catch(e){$('#sGo').disabled=false;msg.innerHTML=`연결하지 못했어요. ${/404|relation|tripbook_records|PGRST/.test(e.message)?'2단계 코드를 실행했는지 확인해 주세요.':'주소와 키를 다시 확인해 주세요.'}<br><span class="faint">${esc(e.message)}</span>`;return}
     try{
       const move=!!$('#sMove')?.checked;const pathMap={};
       const fix=d=>{const o={...d};for(const k of ['path','avatar','cover'])if(o[k]&&pathMap[o[k]])o[k]=pathMap[o[k]];return o};
@@ -1035,7 +1042,8 @@ function wipeRemote(){
       const paths=new Set();rows.forEach(r=>{const d=r.data||{};['path','avatar','cover'].forEach(k=>{if(d[k]&&String(d[k]).startsWith(cfg.folder+'/'))paths.add(d[k])})});
       const res=await BE.wipe([...paths],on);
       LS.del(outboxKey());LS.del('tb.cache.'+cfg.trip);
-      $('#modal .sheet').innerHTML=`<h2>모두 지웠어요</h2><p class="muted" style="margin:10px 0 16px">이 여행의 글${res.removed>=res.photos?'과 사진':''}이 Supabase에서 지워졌습니다.${res.removed<res.photos?` 사진 ${res.photos-res.removed}장은 지우지 못했어요. 아래처럼 프로젝트를 지우면 함께 사라집니다.`:''} 완전히 정리하려면 Supabase 화면의 Project Settings › General 맨 아래에서 Delete project를 눌러 프로젝트 자체도 지워 주세요.</p><button class="btn block-w" id="wDone">처음 화면으로</button>`;
+      $('#modal .sheet').innerHTML=`<h2>모두 지웠어요</h2><p class="muted" style="margin:10px 0 16px">이 여행의 글${res.removed>=res.photos?'과 사진':''}이 Supabase에서 지워졌습니다.${res.removed<res.photos?` 사진 ${res.photos-res.removed}장은 지우지 못했어요. 아래처럼 프로젝트를 지우면 함께 사라집니다.`:''} 남은 흔적까지 정리하려면 Supabase의 SQL Editor에서 아래 코드를 실행하고, Storage 메뉴에서 tripbook 보관함을 지워 주세요. 이 여행에만 쓴 프로젝트라면 Project Settings › General 맨 아래 Delete project로 프로젝트를 통째로 지워도 됩니다.</p><pre class="code">${esc(CLEAN_SQL)}</pre><div class="sp"></div><div class="row"><button class="btn line" id="wCp">코드 복사</button><button class="btn grow" id="wDone">처음 화면으로</button></div>`;
+      $('#wCp').onclick=()=>copyText(CLEAN_SQL);
       $('#wDone').onclick=()=>{LS.del('tb.cfg');cfg=null;rows.clear();closeSheet();$('#root').innerHTML='';location.hash='';render()};
     }catch(e){$('#wGo').disabled=false;on(0,'일부를 지우지 못했어요: '+e.message+' 다시 눌러 주세요.')}
   };
