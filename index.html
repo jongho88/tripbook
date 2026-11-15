@@ -832,7 +832,7 @@ function rCover(v){
     ['refl',6,'소회',`${refl.length}/${ms.length||0}명 작성`],
     ['money',null,'정산',ex.length?won(ex.reduce((s,e)=>s+e.amount,0)):'지출 없음']
   ];
-  v.innerHTML=`
+  v.innerHTML=`${a2hsCard()}
     ${m.place?`<p class="cover-place">${esc(m.place)}</p>`:''}
     <h1 class="cover-title">${esc(m.title||'여행 제목을 정해 주세요')}</h1>
     ${m.sub?`<p class="cover-sub">${esc(m.sub)}</p>`:'<div style="height:14px"></div>'}
@@ -860,6 +860,7 @@ function rCover(v){
       <div class="row"><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="fC"></label>${m.cover?`<button class="btn quiet sm" id="fCx">표지 사진 빼기</button>`:''}</div>
     </div>`;
   $$('[data-go]',v).forEach(b=>b.onclick=()=>go(b.dataset.go));
+  bindA2hs();
   bindAuto(v);
   $('#fC').onchange=async e=>{const f=e.target.files[0];if(!f)return;toast('표지 사진 올리는 중…',8000);try{const {path}=await savePhoto(await shrink(f,2000,.85));await patch('trip','meta',{cover:path});toast('표지 사진을 바꿨어요')}catch(err){toast('올리지 못했어요: '+err.message)}};
   const cx=$('#fCx');if(cx)cx.onclick=()=>patch('trip','meta',{cover:null});
@@ -1251,7 +1252,60 @@ table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:8px 4px;b
 /* ---------------------------------------------------------------
    시작
    --------------------------------------------------------------- */
+/* ---------------------------------------------------------------
+   카카오톡 등 앱 안 브라우저 → Safari/크롬으로 넘기기, 홈 화면 추가 안내
+   --------------------------------------------------------------- */
+const UA=navigator.userAgent||'';
+const IS_IOS=/iPhone|iPad|iPod/i.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1);
+const IS_ANDROID=/Android/i.test(UA);
+const INAPP=/KAKAOTALK/i.test(UA)?'kakao':/Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp|DaumApps|BAND\//i.test(UA)?'other':null;
+const STANDALONE=(()=>{try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}})();
+const SS={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}};
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(view==='cover'&&$('#view'))render()});
+function openExternal(){location.href='kakaotalk://web/openExternal?url='+encodeURIComponent(location.href)}
+function rInApp(){
+  const br=IS_IOS?'Safari':'크롬';
+  const where=INAPP==='kakao'?'카카오톡':'이 앱';
+  const steps=IS_IOS?[['오른쪽 아래 <b style="display:inline">공유 버튼</b>을 누릅니다','네모에 위쪽 화살표가 있는 모양이에요.'],['<b style="display:inline">Safari로 열기</b>를 고릅니다','Safari가 열리면 비밀번호를 넣고 들어가세요.']]
+    :[['오른쪽 아래(또는 위) <b style="display:inline">⋮</b> 버튼을 누릅니다','점 세 개가 세로로 있는 모양이에요.'],['<b style="display:inline">다른 브라우저로 열기</b>를 고릅니다','크롬이 열리면 비밀번호를 넣고 들어가세요.']];
+  $('#root').innerHTML=`<main class="welcome">
+    <p class="cover-place">여행모아</p>
+    <h1 style="font-size:clamp(34px,9vw,52px)">${br}에서<br>열어 주세요</h1>
+    <p class="lead">${where} 안에서 열면 홈 화면에 추가할 수 없고, 들어온 기록도 따로 보관돼서 나중에 다시 들어와야 해요.</p>
+    <ol class="steps">${steps.map(([t,d])=>`<li><b>${t}</b><p class="muted">${d}</p></li>`).join('')}</ol>
+    ${INAPP==='kakao'?`<button class="btn block-w" id="iaTry">${br}로 열기</button><div class="sp"></div>`:''}
+    <button class="btn line block-w" id="iaCopy">링크 복사</button>
+    <p class="small muted" style="margin-top:8px">복사한 링크를 ${br} 주소창에 붙여넣어도 됩니다.</p>
+    <button class="link small" id="iaStay" style="margin-top:22px">그냥 여기서 계속하기</button>
+  </main>`;
+  const t=$('#iaTry');if(t)t.onclick=openExternal;
+  $('#iaCopy').onclick=()=>copyText(location.href);
+  $('#iaStay').onclick=()=>{SS.set('tb.stayInApp','1');boot()};
+}
+function a2hsCard(){
+  if(STANDALONE||INAPP||!(IS_IOS||IS_ANDROID)||LS.get('tb.a2hsDone'))return '';
+  const how=IS_IOS?'Safari 아래쪽 <b>공유 버튼</b>(네모에 위 화살표)을 누르고 <b>홈 화면에 추가</b>를 고르세요.'
+    :installEvt?'아래 버튼을 누르면 바로 추가돼요.':'크롬 오른쪽 위 <b>⋮</b> 메뉴에서 <b>홈 화면에 추가</b>(또는 앱 설치)를 고르세요.';
+  return `<div class="block" id="a2hs" style="margin:0 0 22px;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start">
+    <img src="apple-touch-icon.png" alt="" style="width:52px;height:52px;border-radius:12px">
+    <div><b style="font-size:16px">홈 화면에 여행모아 추가하기</b><p class="small muted" style="margin-top:4px">${how}</p>
+    <div class="row" style="margin-top:10px">${installEvt?'<button class="btn sm" id="a2hsGo">홈 화면에 추가</button>':''}<button class="btn quiet sm" id="a2hsX">닫기</button></div></div></div>`;
+}
+function bindA2hs(){
+  const x=$('#a2hsX');if(x)x.onclick=()=>{LS.set('tb.a2hsDone',true);$('#a2hs')?.remove()};
+  const g=$('#a2hsGo');if(g)g.onclick=async()=>{try{installEvt.prompt();const r=await installEvt.userChoice;installEvt=null;if(r?.outcome==='accepted'){LS.set('tb.a2hsDone',true);toast('홈 화면에 추가했어요')}render()}catch(e){console.warn(e)}};
+}
+
 async function boot(){
+  if(INAPP&&!SS.get('tb.stayInApp')){
+    if(INAPP==='kakao'&&!SS.get('tb.extTried')){
+      SS.set('tb.extTried','1');
+      $('#root').innerHTML='<main class="welcome"><p class="muted">'+(IS_IOS?'Safari':'크롬')+'로 여는 중…</p></main>';
+      openExternal();setTimeout(rInApp,1500);return;
+    }
+    return rInApp();
+  }
   readJoin();
   cfg=LS.get('tb.cfg');
   if(cfg&&cfg.mode==='remote'&&!cfg.tripKey){LS.del('tb.cfg');cfg=null}
