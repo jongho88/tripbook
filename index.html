@@ -173,6 +173,12 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .vote .faces .face{margin-left:-6px;transform:none;box-shadow:0 0 0 1px var(--c)}
 .like{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;border:1.5px solid var(--line);background:#fff}
 .like.on{border-color:var(--cobalt);background:var(--cobalt-soft);color:var(--cobalt)}
+.like.no.on{border-color:var(--red);background:#FDECEC;color:var(--red)}
+.vwho{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+.vwho .faces{--s:22px;padding-left:6px}.vwho .faces .face{margin-left:-6px;transform:none;box-shadow:0 0 0 1px var(--c)}
+.okb{display:inline-block;font-size:12px;font-weight:800;color:var(--cobalt);border:2px solid var(--cobalt);border-radius:999px;padding:0 8px;transform:rotate(-6deg)}
+.tl .dot.ok{background:var(--cobalt)}
+.tl li.cand .tm,.tl li.cand .pl,.tl li.cand .nt,.tl li.cand .faint{opacity:.45}.tl li.cand .dot{opacity:.5}
 
 /* ---------- log ---------- */
 .wx{display:flex;gap:2px;flex-wrap:wrap}
@@ -1003,25 +1009,39 @@ function editPrep(id,type){
 }
 
 /* ---- 3 계획 ---- */
+const voteOf=x=>typeof x.v==='number'?x.v:(x.on?1:0);
+function votesFor(id){const vs=all('vote').filter(x=>x.item===id);return{up:vs.filter(x=>voteOf(x)===1).map(x=>x.member),down:vs.filter(x=>voteOf(x)===-1).map(x=>x.member)}}
 function rPlan(v){
   const ds=days();
   if(!ds.length){v.innerHTML=chapHead('plan')+`<div class="empty"><b>먼저 여행 날짜를 정해 주세요</b>표지의 여행 정보에서 출발일과 돌아오는 날을 넣으면 날짜별 칸이 생깁니다.</div><button class="btn line" onclick="go('cover')">날짜 정하러 가기</button>`;return}
   if(planDay==null||planDay>=ds.length)planDay=Math.max(0,todayIdx());
   const items=all('plan').filter(p=>p.day===planDay).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));
   const theme=one('theme','d'+planDay)?.text||'';
-  v.innerHTML=chapHead('plan','날짜를 골라 일정을 채워 주세요. 가고 싶은 곳에는 손을 들어 두면 누가 원하는지 보입니다.')+`
+  const anyOk=items.some(i=>i.confirmed);
+  v.innerHTML=chapHead('plan','날짜를 골라 일정을 채워 주세요. 후보마다 좋아요, 아쉬워요를 눌러 의견을 모으고, 총무가 확정하면 그 일정이 책에 들어갑니다.')+`
     <div class="dates" role="tablist">${ds.map(d=>`<button role="tab" data-d="${d.i}" class="${d.i===planDay?'on':''}" aria-selected="${d.i===planDay}"><span>${d.wd}</span><b>${d.date.getDate()}</b><span>${d.i+1}일째</span></button>`).join('')}</div>
     <input class="under" style="font-size:20px;font-weight:800;margin:10px 0 18px" id="thm" value="${esc(theme)}" placeholder="${dayName(planDay)}의 테마 (예: Highway 1 해안 드라이브)" aria-label="이날의 테마">
-    <ol class="tl">${items.map(it=>{const vs=all('vote').filter(x=>x.item===it.id&&x.on).map(x=>x.member);const mine=vs.includes(myId);return `<li><div class="tm">${esc(it.time||'')}</div><div><div class="dot"></div></div><div>
-      <div class="pl">${esc(it.place)}</div>${it.note?`<div class="nt">${esc(it.note)}</div>`:''}
-      <div class="vote"><button class="like ${mine?'on':''}" data-vt="${it.id}">${mine?'가고 싶어요 ✓':'가고 싶어요'}</button>${vs.length?`<span class="faces">${vs.map(id=>face(member(id),24)).join('')}</span>`:''}<button class="btn quiet sm" data-px="${it.id}" style="margin-left:auto">빼기</button></div></div></li>`}).join('')}</ol>
-    ${items.length?'':'<div class="empty"><b>이날은 아직 비어 있어요</b>아래에서 시간과 장소를 넣어 주세요.</div>'}
-    <div class="block"><h3>일정 추가</h3><div class="row"><input class="in" type="time" id="nTm" style="width:auto" aria-label="시간"><input class="in grow" id="nPl" placeholder="장소나 할 일" aria-label="장소"></div><input class="in" id="nNt" placeholder="메모 (선택)" style="margin-top:8px" aria-label="메모"><div class="sp"></div><button class="btn" id="nAdd">일정 추가</button></div>`;
+    <ol class="tl">${items.map(it=>{const {up,down}=votesFor(it.id);const mv=up.includes(myId)?1:down.includes(myId)?-1:0;const canDel=isOwner||(it.author&&it.author===myId);
+      return `<li class="${anyOk&&!it.confirmed?'cand':''}"><div class="tm">${esc(it.time||'')}</div><div><div class="dot ${it.confirmed?'ok':''}"></div></div><div>
+      <div class="row" style="gap:8px;align-items:center"><div class="pl">${esc(it.place)}</div>${it.confirmed?'<span class="okb">확정</span>':''}</div>${it.note?`<div class="nt">${esc(it.note)}</div>`:''}
+      ${it.author?`<div class="small faint">${esc(nameOf(it.author))} 님이 올림</div>`:''}
+      <div class="vote">
+        <button class="like ${mv===1?'on':''}" data-up="${it.id}" aria-pressed="${mv===1}">좋아요 ${up.length||''}</button>
+        <button class="like no ${mv===-1?'on':''}" data-down="${it.id}" aria-pressed="${mv===-1}">아쉬워요 ${down.length||''}</button>
+      </div>
+      ${up.length||down.length?`<div class="vwho">${up.length?`<span class="faces">${up.map(id=>face(member(id),22)).join('')}</span>`:''}${down.length?`<span class="faint small">아쉬워요:</span><span class="faces">${down.map(id=>face(member(id),22)).join('')}</span>`:''}</div>`:''}
+      ${isOwner||canDel?`<div class="row" style="gap:6px;margin-top:8px">${isOwner?`<button class="btn ${it.confirmed?'quiet':'line'} sm" data-ok="${it.id}">${it.confirmed?'확정 취소':'확정'}</button>`:''}${canDel?`<button class="btn quiet sm" data-px="${it.id}">지우기</button>`:''}</div>`:''}
+      </div></li>`}).join('')}</ol>
+    ${items.length?(anyOk?'<p class="small faint" style="margin:-6px 0 6px">흐리게 보이는 일정은 확정되지 않은 후보예요. 책에는 확정된 일정만 들어갑니다.</p>':''):'<div class="empty"><b>이날은 아직 비어 있어요</b>아래에서 시간과 장소를 넣어 주세요. 같은 시간에 후보를 여러 개 올려도 됩니다.</div>'}
+    <div class="block"><h3>일정 추가</h3><div class="row"><input class="in" type="time" id="nTm" style="width:auto" aria-label="시간"><input class="in grow" id="nPl" placeholder="장소나 할 일 (예: Muir Woods)" aria-label="장소"></div><input class="in" id="nNt" placeholder="메모 (선택)" style="margin-top:8px" aria-label="메모"><div class="sp"></div><button class="btn" id="nAdd">일정 추가</button></div>`;
   $$('[data-d]',v).forEach(b=>b.onclick=()=>{planDay=Number(b.dataset.d);render()});
   $('#thm').onblur=e=>{if(e.target.value!==theme)put('theme','d'+planDay,{text:e.target.value},{silent:true})};
-  $('#nAdd').onclick=()=>{const pl=$('#nPl').value.trim();if(!pl){toast('장소나 할 일을 적어 주세요');return}put('plan',uid(8),{day:planDay,time:$('#nTm').value,place:pl,note:$('#nNt').value.trim()})};
-  $$('[data-vt]',v).forEach(b=>b.onclick=()=>{if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return}const k=b.dataset.vt+'__'+myId;const cur=one('vote',k);put('vote',k,{item:b.dataset.vt,member:myId,on:!(cur&&cur.on)})});
-  $$('[data-px]',v).forEach(b=>b.onclick=()=>remove('plan',b.dataset.px));
+  $('#nAdd').onclick=()=>{const pl=$('#nPl').value.trim();if(!pl){toast('장소나 할 일을 적어 주세요');return}put('plan',uid(8),{day:planDay,time:$('#nTm').value,place:pl,note:$('#nNt').value.trim(),author:myId||null})};
+  const vote=(id,val)=>{if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return}const k=id+'__'+myId;const cur=one('vote',k);const now=cur?voteOf(cur):0;put('vote',k,{item:id,member:myId,v:now===val?0:val})};
+  $$('[data-up]',v).forEach(b=>b.onclick=()=>vote(b.dataset.up,1));
+  $$('[data-down]',v).forEach(b=>b.onclick=()=>vote(b.dataset.down,-1));
+  $$('[data-ok]',v).forEach(b=>b.onclick=()=>{const it=one('plan',b.dataset.ok);patch('plan',b.dataset.ok,{confirmed:!it.confirmed});toast(it.confirmed?'확정을 취소했어요':`${it.place} 확정!`)});
+  $$('[data-px]',v).forEach(b=>b.onclick=()=>{const it=one('plan',b.dataset.px);ask(`「${it.place}」을(를) 일정에서 지울까요?`,'지우기',()=>remove('plan',b.dataset.px))});
 }
 
 /* ---- 4 여행 일기 ---- */
@@ -1352,7 +1372,7 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   b+=`<section>${chap(1,'사람들')}<div class="people">${ms.map(x=>`<div class="pp">${F(x,92)}<div><h3 style="color:${mcol(x)}">${esc(x.name)}</h3><p class="rl">${esc(x.role||'')}</p>${x.hope?`<p>${esc(x.hope)}</p>`:''}</div></div>`).join('')}</div></section>`;
   b+=`<section>${chap(2,'준비')}${prep.map(p=>`<div class="tk sm"><div class="tm1"><small>${PREP[p.type]||''}</small><b>${esc(p.title||'')}</b><p>${[p.date&&p.date.replace(/-/g,'. '),p.cost&&won(p.cost),p.payer&&nameOf(p.payer)+' 결제',p.code&&'예약번호 '+p.code].filter(Boolean).map(esc).join(', ')}</p>${p.memo?`<p>${esc(p.memo)}</p>`:''}</div><div class="ts">${p.status==='done'?'<span class="stamp">확정</span>':''}</div></div>`).join('')||'<p class="no">기록이 없어요</p>'}
     ${checks.length?`<h3 class="h3">챙긴 것</h3><ul class="cks">${checks.map(c=>`<li>${c.done?'☑':'☐'} ${esc(c.text)}${c.who?` <small>${nm(c.who)}</small>`:''}</li>`).join('')}</ul>`:''}</section>`;
-  b+=`<section>${chap(3,'계획')}${ds.map(d=>{const its=all('plan').filter(p=>p.day===d.i).sort((a,c)=>(a.time||'99').localeCompare(c.time||'99'));const th=one('theme','d'+d.i)?.text;if(!its.length&&!th)return'';return dh(d.i)+(th?`<p class="theme">${esc(th)}</p>`:'')+`<ol class="tl">${its.map(i=>{const vs=all('vote').filter(x=>x.item===i.id&&x.on).map(x=>nameOf(x.member));return `<li><span class="t">${esc(i.time||'')}</span><div><b>${esc(i.place)}</b>${i.note?`<p>${esc(i.note)}</p>`:''}${vs.length?`<p class="vs">가고 싶어한 사람: ${vs.map(esc).join(', ')}</p>`:''}</div></li>`}).join('')}</ol>`}).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
+  b+=`<section>${chap(3,'계획')}${ds.map(d=>{let its=all('plan').filter(p=>p.day===d.i).sort((a,c)=>(a.time||'99').localeCompare(c.time||'99'));if(its.some(i=>i.confirmed))its=its.filter(i=>i.confirmed);const th=one('theme','d'+d.i)?.text;if(!its.length&&!th)return'';return dh(d.i)+(th?`<p class="theme">${esc(th)}</p>`:'')+`<ol class="tl">${its.map(i=>{const {up,down}=votesFor(i.id);return `<li><span class="t">${esc(i.time||'')}</span><div><b>${esc(i.place)}</b>${i.note?`<p>${esc(i.note)}</p>`:''}${up.length||down.length?`<p class="vs">${up.length?`좋아요: ${up.map(x=>esc(nameOf(x))).join(', ')}`:''}${up.length&&down.length?'<br>':''}${down.length?`아쉬워요: ${down.map(x=>esc(nameOf(x))).join(', ')}`:''}</p>`:''}</div></li>`}).join('')}</ol>`}).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const lg={};logs.forEach(l=>(lg[l.day]=lg[l.day]||[]).push(l));
   const LL=locs(),lmap={},limg={};LL.forEach(l=>{if(l.day!=null)(lmap[l.day]=lmap[l.day]||[]).push(l)});
   let mi=0;const mk=Object.keys(lmap);
