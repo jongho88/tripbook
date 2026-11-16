@@ -1038,7 +1038,7 @@ function rPlan(v){
   const items=all('plan').filter(p=>p.day===planDay).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));
   const theme=one('theme','d'+planDay)?.text||'';
   const anyOk=items.some(i=>i.confirmed);
-  v.innerHTML=chapHead('plan','날짜를 골라 일정을 채워 주세요. 후보마다 좋아요, 아쉬워요를 눌러 의견을 모으고, 총무가 확정하면 그 일정이 책에 들어갑니다.')+`
+  v.innerHTML=chapHead('plan','날짜를 골라 일정을 채워 주세요. 후보마다 좋아요, 아쉬워요를 눌러 의견을 모으고,<br>총무가 확정하면 그 일정이 책에 들어갑니다.')+`
     <div class="dates" role="tablist">${ds.map(d=>`<button role="tab" data-d="${d.i}" class="${d.i===planDay?'on':''}" aria-selected="${d.i===planDay}"><span>${d.wd}</span><b>${d.date.getDate()}</b><span>${d.i+1}일째</span></button>`).join('')}</div>
     <input class="under" style="font-size:20px;font-weight:800;margin:10px 0 18px" id="thm" value="${esc(theme)}" placeholder="${dayName(planDay)}의 테마 (예: Highway 1 해안 드라이브)" aria-label="이날의 테마">
     <ol class="tl">${items.map(it=>{const {up,down}=votesFor(it.id);const mv=up.includes(myId)?1:down.includes(myId)?-1:0;const canDel=isOwner||(it.author&&it.author===myId);
@@ -1071,7 +1071,7 @@ function rLog(v){
   const logs=all('log').sort((a,b)=>(a.day-b.day)||(a.created||0)-(b.created||0));
   const ph=photos();
   const groups={};logs.forEach(l=>(groups[l.day]=groups[l.day]||[]).push(l));
-  v.innerHTML=chapHead('log','여행 중에는 이것만 쓰면 됩니다. 날씨, 오늘의 한 줄, 사진 몇 장.')+`
+  v.innerHTML=chapHead('log','여행 중에는 이것만 쓰면 됩니다.<br>날씨, 오늘의 한 줄, 사진 몇 장.')+`
     <div class="block">
       <div class="row"><select class="sel" id="lD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===ti?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select></div>
       <div style="margin-top:10px">${wxPicker(logDraft.weather)}</div>
@@ -1235,7 +1235,7 @@ async function staticMap(pts,W=720,H=420){
 function rAlbum(v){
   const ds=days(),ph=photos();const by={};ph.forEach(p=>(by[p.day??'x']=by[p.day??'x']||[]).push(p));
   const keys=Object.keys(by).sort((a,b)=>(a==='x')-(b==='x')||a-b);
-  v.innerHTML=chapHead('album','날짜별로 모인 사진입니다. 사진 아래에 한 줄을 적으면 책의 사진 설명이 돼요.')+`
+  v.innerHTML=chapHead('album','날짜별로 모인 사진입니다.<br>사진 아래에 한 줄을 적으면 책의 사진 설명이 돼요.')+`
     <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진 추가<input type="file" class="file" id="aF" accept="image/*" multiple></label></div>
     ${keys.map(k=>`<div class="day-h"><b>${k==='x'?'날짜 없음':Number(k)+1+'일째'}</b><span>${ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${by[k].length}장</span></div>
       <div class="album">${by[k].map(p=>`<figure><img src="${esc(mediaUrl(p.path))}" alt="" loading="lazy"><input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="사진 설명" aria-label="사진 설명"><div class="meta"><span>${esc(nameOf(p.author))}</span><button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button></div></figure>`).join('')}</div>`).join('')}
