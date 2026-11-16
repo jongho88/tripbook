@@ -186,9 +186,12 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .tbox .in.has+.tph,.tbox .in:focus+.tph{display:none}
 .tbox .in:not(.has):not(:focus)::-webkit-datetime-edit{color:transparent}
 /* ---------- log ---------- */
-.wx{display:flex;gap:2px;flex-wrap:wrap}
-.wx button{font-size:22px;width:42px;height:42px;border-radius:12px}
-.wx button.on{background:var(--cobalt-soft);box-shadow:inset 0 0 0 2px var(--cobalt)}
+.wx{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.wx button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0 6px;border-radius:12px;color:var(--ink);border:1.5px solid var(--line);background:#fff}
+.wx button span{font-size:10.5px;color:var(--ink2);white-space:nowrap;letter-spacing:-.04em}
+.wx button.on{background:var(--cobalt-soft);border-color:var(--cobalt);color:var(--cobalt)}
+.wx button.on span{color:var(--cobalt);font-weight:700}
+.wxi{display:inline-flex;align-items:center;gap:3px;color:var(--ink2);font-weight:500;font-size:13px;margin-left:6px;vertical-align:-3px}
 .day-h{display:flex;align-items:baseline;gap:10px;margin:28px 0 6px}
 .day-h b{font-size:22px;font-weight:800}
 .day-h span{color:var(--ink2);font-size:14px}
@@ -313,7 +316,19 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    ===================================================================== */
 
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
-const WEATHER=['☀️','⛅','☁️','🌧️','⛈️','❄️','🌫️'];
+/* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
+const WX=[
+ {k:'sun',n:'맑음',e:'☀️',d:'<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>'},
+ {k:'partly',n:'구름 조금',e:'⛅',d:'<path d="M8.5 4.5v1.4M3.6 9.4H5M4.9 5.8l1 1M13 5.8l-1 1"/><path d="M5.8 11.6A3.4 3.4 0 1 1 11.9 8"/><path d="M8.5 19.5h9a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.6 1.4A2.8 2.8 0 0 0 8.5 19.5z"/>'},
+ {k:'cloud',n:'흐림',e:'☁️',d:'<path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.5 1.6A3.2 3.2 0 0 0 7 18.5z"/>'},
+ {k:'rain',n:'비',e:'🌧️',d:'<path d="M7 14.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.5 1.6A3.2 3.2 0 0 0 7 14.5z"/><path d="M8.5 17.5l-1 2.5M12.5 17.5l-1 2.5M16.5 17.5l-1 2.5"/>'},
+ {k:'storm',n:'뇌우',e:'⛈️',d:'<path d="M7 14.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.5 1.6A3.2 3.2 0 0 0 7 14.5z"/><path d="M12.8 14.5l-2.3 3.6h3l-2.3 3.6"/>'},
+ {k:'snow',n:'눈',e:'❄️',d:'<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="M9.8 4.8L12 6.6l2.2-1.8M9.8 19.2L12 17.4l2.2 1.8"/>'},
+ {k:'fog',n:'안개',e:'🌫️',d:'<path d="M4 9h16M6 13h12M4 17h16"/><path d="M7 5.5h10"/>'}];
+const wxFind=v=>v?WX.find(w=>w.k===v||w.e===v||w.e.replace('\uFE0F','')===String(v).replace('\uFE0F','')):null;
+const wxSvg=(w,sz=26,col='currentColor')=>`<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${w.d}</svg>`;
+const wxInline=v=>{const w=wxFind(v);return w?`<span class="wxi">${wxSvg(w,18)}${w.n}</span>`:''};
+const wxPicker=(sel,attr='')=>`<div class="wx" role="group" aria-label="날씨" ${attr}>${WX.map(w=>`<button type="button" data-w="${w.k}" class="${wxFind(sel)?.k===w.k?'on':''}" aria-pressed="${wxFind(sel)?.k===w.k}">${wxSvg(w)}<span>${w.n}</span></button>`).join('')}</div>`;
 const PREP={stay:'숙박',flight:'항공',car:'렌트카',etc:'기타'};
 const REFLQ=[['moment','가장 기억에 남는 순간'],['surprise','예상과 달랐던 것'],['thanks','함께한 사람들에게'],['next','다음에 함께 가고 싶은 곳'],['free','하고 싶은 말']];
 const CHAPS=[
@@ -1059,13 +1074,13 @@ function rLog(v){
   v.innerHTML=chapHead('log','여행 중에는 이것만 쓰면 됩니다. 날씨, 오늘의 한 줄, 사진 몇 장.')+`
     <div class="block">
       <div class="row"><select class="sel" id="lD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===ti?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select></div>
-      <div class="wx" style="margin-top:10px" role="group" aria-label="날씨">${WEATHER.map(w=>`<button data-w="${w}" class="${logDraft.weather===w?'on':''}" aria-label="날씨 ${w}">${w}</button>`).join('')}</div>
+      <div style="margin-top:10px">${wxPicker(logDraft.weather)}</div>
       <textarea class="ta" id="lT" style="margin-top:10px" placeholder="오늘의 한 줄. 길지 않아도 괜찮아요." aria-label="오늘의 한 줄"></textarea>
       <div class="row" style="margin-top:10px"><label class="btn line sm">사진 고르기<input type="file" class="file" id="lF" accept="image/*" multiple></label><span class="small muted grow" id="lN">${logDraft.files.length?logDraft.files.length+'장 골랐어요':''}</span><button class="btn" id="lGo">올리기</button></div>
     </div>
     ${Object.keys(groups).sort((a,b)=>a-b).map(d=>`<div class="day-h"><b>${Number(d)+1}일째</b><span>${ds[d]?`${ds[d].md} ${ds[d].wd}요일`:''}</span></div>
       ${groups[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="entry">${face(a,40)}<div>
-        <div class="row" style="justify-content:space-between"><span class="by" style="color:${mcol(a)}">${esc(a?.name||'누군가')} ${l.weather||''}</span><span class="row" style="gap:6px">${l.author===myId?`<button class="btn quiet sm" data-le="${l.id}">고치기</button>`:''}${l.author===myId||isOwner?`<button class="btn quiet sm" data-lx="${l.id}">지우기</button>`:''}</span></div>
+        <div class="row" style="justify-content:space-between"><span class="by" style="color:${mcol(a)}">${esc(a?.name||'누군가')}${wxInline(l.weather)}</span><span class="row" style="gap:6px">${l.author===myId?`<button class="btn quiet sm" data-le="${l.id}">고치기</button>`:''}${l.author===myId||isOwner?`<button class="btn quiet sm" data-lx="${l.id}">지우기</button>`:''}</span></div>
         ${l.text?`<p class="tx">${esc(l.text)}</p>`:''}
         ${ps.length?`<div class="ph ${ps.length===1?'one':ps.length===2?'two':''}">${ps.map(p=>`<img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy">`).join('')}</div>`:''}
       </div></article>`}).join('')}`).join('')}
@@ -1086,11 +1101,11 @@ function rLog(v){
 
 function editLog(id){
   const l=one('log',id);if(!l)return;const ds=days();
-  let weather=l.weather||'',files=[];const drop=new Set();
+  let weather=wxFind(l.weather)?.k||'',files=[];const drop=new Set();
   const cur=()=>photos().filter(p=>p.log===id&&!drop.has(p.id));
   openSheet(`<h2>일기 고치기</h2>
     <label class="lab" for="leD">날짜</label><select class="sel" id="leD">${ds.map(d=>`<option value="${d.i}" ${d.i===l.day?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select>
-    <label class="lab">날씨</label><div class="wx" id="leW">${WEATHER.map(w=>`<button type="button" data-w="${w}" class="${weather===w?'on':''}" aria-label="날씨 ${w}">${w}</button>`).join('')}</div>
+    <label class="lab">날씨</label>${wxPicker(weather,'id="leW"')}
     <label class="lab" for="leT">오늘의 한 줄</label><textarea class="ta" id="leT">${esc(l.text||'')}</textarea>
     <label class="lab">사진</label><div class="ph" id="lePh"></div>
     <div class="row" style="margin-top:10px"><label class="btn line sm">사진 더하기<input type="file" class="file" id="leF" accept="image/*" multiple></label><span class="small muted" id="leN"></span></div>
@@ -1415,7 +1430,7 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   let mi=0;const mk=Object.keys(lmap);
   for(const d of mk){mi++;onp(.92+.06*mi/mk.length,`지도 그리는 중 ${mi}/${mk.length}`);limg[d]=await staticMap(lmap[d])}
   const routeBlock=d=>{const arr=lmap[d];if(!arr)return'';return `<div class="route">${limg[d]?`<img src="${limg[d]}" alt="${Number(d)+1}일째 경로">`:''}<ol>${arr.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`};
-  b+=`<section>${chap(4,'여행 일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')} ${l.weather||''}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
+  b+=`<section>${chap(4,'여행 일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')}${wxInline(l.weather)}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const ab={};ph.forEach(p=>(ab[p.day??'x']=ab[p.day??'x']||[]).push(p));
   const lx=LL.filter(l=>l.day==null);
   b+=`<section>${chap(5,'위치 기록')}${Object.keys(lmap).sort((a,c)=>a-c).map(d=>dh(Number(d))+routeBlock(d)).join('')}${lx.length?`<div class="dh"><b>여행 날짜 밖</b></div><div class="route"><ol>${lx.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`:''}${LL.length?'':'<p class="no">기록이 없어요</p>'}</section>`;
@@ -1452,6 +1467,7 @@ figure{margin:0;break-inside:avoid}figure img{width:100%;aspect-ratio:4/5;object
 .tot b{font-size:40px;letter-spacing:-.04em}.tot span{color:#4E5A75}.xf{list-style:none;padding:0}.xf li{padding:8px 0;border-bottom:1px solid #E9EDF4}.xf b{background:linear-gradient(transparent 58%,#FFE45C 58%,#FFE45C 92%,transparent 92%)}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:8px 4px;border-bottom:1px solid #E9EDF4;text-align:left}th{font-size:13px;color:#8A93A8;font-weight:600}.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .route{margin:8px 0 18px;break-inside:avoid}.route img{width:100%;border-radius:14px;display:block}.route ol{columns:2;font-size:14px;padding-left:22px;margin:10px 0 0;color:#4E5A75}.route ol b{color:#14213D;font-variant-numeric:tabular-nums}.route small{color:#8A93A8}
+.wxi{display:inline-flex;align-items:center;gap:3px;color:#4E5A75;font-weight:500;font-size:13px;margin-left:6px;vertical-align:-3px}
 .no{color:#8A93A8}.colo{margin-top:48px;text-align:center;color:#8A93A8;font-size:14px}
 .pbtn{position:fixed;right:16px;bottom:16px;background:#2340E0;color:#fff;border:0;border-radius:12px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}
 @media print{body{background:#fff;padding:0}section{max-width:none;margin:0;border-radius:0;padding:24px 8px;break-before:page}section.cover{break-before:auto}.pbtn{display:none}}
