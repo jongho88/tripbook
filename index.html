@@ -143,6 +143,13 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .person .hp.empty{color:var(--ink3)}
 .person .act{margin-top:8px}
 
+/* ---------- reorder ---------- */
+.reorder{list-style:none;padding:0;margin:0}
+.reorder li{display:grid;grid-template-columns:24px auto 1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.reorder .n{font-weight:800;color:var(--cobalt);font-variant-numeric:tabular-nums;text-align:center}
+.reorder b{font-size:17px}
+.reorder .btn{min-width:44px}
+
 /* ---------- prep ---------- */
 .tlist{display:grid;gap:12px}
 .tk-type{font-size:13px;font-weight:700;color:var(--cobalt)}
@@ -862,7 +869,7 @@ function rPickMe(){
   const add=async()=>{
     const n=$('#pmNew').value.trim();if(!n){toast('이름을 적어 주세요');return}
     const same=ms.find(m=>m.name===n);if(same)return start(same.id);
-    const id=uid(8);await put('member',id,{name:n,color:COLORS[ms.length%COLORS.length],order:ms.length},{silent:true});start(id);
+    const id=uid(8);await put('member',id,{name:n,color:COLORS[ms.length%COLORS.length],order:nextOrder()},{silent:true});start(id);
   };
   $('#pmAdd').onclick=add;$('#pmNew').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)add()};
 }
@@ -946,17 +953,37 @@ function rCover(v){
 }
 
 /* ---- 1 사람들 ---- */
+let peopleReorder=false;
+const nextOrder=()=>members().reduce((mx,m)=>Math.max(mx,Number(m.order)||0),-1)+1;
 function rPeople(v){
   const ms=members();
+  if(!isOwner)peopleReorder=false;
+  if(peopleReorder){
+    v.innerHTML=chapHead('people','순서를 바꿀 사람 옆의 위, 아래 버튼을 눌러 주세요. 바꾼 순서는 표지, 이름 고르기, 앨범, 정산, 책에 모두 똑같이 적용돼요.')+`
+      <ol class="reorder">${ms.map((m,k)=>`<li><span class="n">${k+1}</span>${face(m,40)}<b>${esc(m.name)}</b>
+        <button class="btn quiet sm" data-mv="${k}" data-d="-1" ${k===0?'disabled':''} aria-label="${esc(m.name)} 위로">▲</button>
+        <button class="btn quiet sm" data-mv="${k}" data-d="1" ${k===ms.length-1?'disabled':''} aria-label="${esc(m.name)} 아래로">▼</button></li>`).join('')}</ol>
+      <div class="sp"></div><button class="btn block-w" id="roDone">완료</button>`;
+    $$('[data-mv]',v).forEach(b=>b.onclick=async()=>{
+      const k=Number(b.dataset.mv),d=Number(b.dataset.d),ids=ms.map(m=>m.id);const t=k+d;if(t<0||t>=ids.length)return;
+      [ids[k],ids[t]]=[ids[t],ids[k]];
+      for(let n=0;n<ids.length;n++){const m=member(ids[n]);if(Number(m.order)!==n)await patch('member',ids[n],{order:n},{silent:true})}
+      render();const btn=$(`[data-mv="${t}"][data-d="${d}"]`)||$(`[data-mv="${t}"]`);btn?.focus();
+    });
+    $('#roDone').onclick=()=>{peopleReorder=false;render();toast('순서를 바꿨어요')};
+    return;
+  }
   v.innerHTML=chapHead('people','함께 가는 사람들입니다. 각자 얼굴 사진을 올리고, 맡은 역할과 이번 여행에서 기대하는 것을 한 줄씩 적어 주세요.')+`
     <div class="row"><input class="in grow" id="pName" placeholder="이름 또는 별명" aria-label="새 참가자 이름"><button class="btn" id="pAdd">참가자 추가</button></div>
+    ${isOwner&&ms.length>1?'<div style="margin-top:10px"><button class="btn line sm" id="roStart">순서 바꾸기</button></div>':''}
     <div class="people" style="margin-top:8px">${ms.map(m=>`<div class="person">${face(m,76)}<div>
       <div class="nm" style="color:${mcol(m)}">${esc(m.name)}</div><div class="rl">${esc(m.role||'역할 미정')}</div>
       <p class="hp ${m.hope?'':'empty'}">${m.hope?esc(m.hope):'이번 여행에서 기대하는 것을 적어 주세요'}</p>
       <div class="act"><button class="btn quiet sm" data-ed="${m.id}">${m.id===myId?'내 소개 쓰기':'고치기'}</button></div></div></div>`).join('')}</div>
     ${ms.length?'':'<div class="empty"><b>아직 아무도 없어요</b>함께 가는 사람의 이름을 하나씩 추가해 주세요.</div>'}`;
-  const add=async()=>{const n=$('#pName').value.trim();if(!n)return;const id=uid(8);await put('member',id,{name:n,color:COLORS[ms.length%COLORS.length],order:ms.length});if(!myId&&!ms.length){myId=id;LS.set('tb.me.'+(cfg.trip||'local'),id)}toast(`${n} 님을 추가했어요`);setTimeout(()=>$('#pName')?.focus(),0)};
+  const add=async()=>{const n=$('#pName').value.trim();if(!n)return;const id=uid(8);await put('member',id,{name:n,color:COLORS[ms.length%COLORS.length],order:nextOrder()});if(!myId&&!ms.length){myId=id;LS.set('tb.me.'+(cfg.trip||'local'),id)}toast(`${n} 님을 추가했어요`);setTimeout(()=>$('#pName')?.focus(),0)};
   $('#pAdd').onclick=add;$('#pName').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)add()};
+  const rs=$('#roStart');if(rs)rs.onclick=()=>{peopleReorder=true;render()};
   $$('[data-ed]',v).forEach(b=>b.onclick=()=>editPerson(b.dataset.ed));
 }
 function editPerson(id){
