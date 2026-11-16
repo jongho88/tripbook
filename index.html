@@ -228,6 +228,26 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .dchips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 
 /* ---------- album ---------- */
+.ph-open{display:block;width:100%;padding:0;border-radius:10px;overflow:hidden;cursor:zoom-in}
+.ph .ph-open{border-radius:8px}
+.whochips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:14px 0 2px;padding:2px}
+.whochips::-webkit-scrollbar{display:none}
+.whochips button{flex:none;display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 5px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-size:14px}
+.whochips button[data-aw="all"]{padding-left:12px}
+.whochips button .face{--s:22px;border-width:1px;box-shadow:none}
+.whochips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.viewer{position:fixed;inset:0;z-index:95;background:#0E1626;color:#fff;display:grid;grid-template-rows:auto 1fr auto}
+.viewer .vtop{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 6px}
+.viewer .vcount{font-size:14px;color:#C9D0E0;font-variant-numeric:tabular-nums}
+.viewer .vx{width:44px;height:44px;border-radius:50%;color:#fff;font-size:20px;background:rgba(255,255,255,.12)}
+.viewer .vstage{display:grid;place-items:center;overflow:hidden;touch-action:pan-y;padding:0 4px}
+.viewer .vstage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.viewer .vnav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:64px;font-size:40px;line-height:1;color:#fff;background:rgba(255,255,255,.08);border-radius:12px}
+.viewer .vprev{left:8px}.viewer .vnext{right:8px}
+@media (hover:none){.viewer .vnav{background:transparent;width:40px}}
+.viewer .vcap{padding:12px 18px calc(18px + env(safe-area-inset-bottom));display:grid;gap:2px;min-height:64px}
+.viewer .vcap b{font-size:16px}
+.viewer .vcap span{font-size:13px;color:#C9D0E0}
 .album{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 @media (min-width:640px){.album{grid-template-columns:repeat(3,1fr)}}
 .album figure{margin:0}
@@ -1082,7 +1102,7 @@ function rLog(v){
       ${groups[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="entry">${face(a,40)}<div>
         <div class="row" style="justify-content:space-between"><span class="by" style="color:${mcol(a)}">${esc(a?.name||'누군가')}${wxInline(l.weather)}</span><span class="row" style="gap:6px">${l.author===myId?`<button class="btn quiet sm" data-le="${l.id}">고치기</button>`:''}${l.author===myId||isOwner?`<button class="btn quiet sm" data-lx="${l.id}">지우기</button>`:''}</span></div>
         ${l.text?`<p class="tx">${esc(l.text)}</p>`:''}
-        ${ps.length?`<div class="ph ${ps.length===1?'one':ps.length===2?'two':''}">${ps.map(p=>`<img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy">`).join('')}</div>`:''}
+        ${ps.length?`<div class="ph ${ps.length===1?'one':ps.length===2?'two':''}">${ps.map((p,k)=>`<button class="ph-open" data-lo="${l.id}" data-k="${k}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy"></button>`).join('')}</div>`:''}
       </div></article>`}).join('')}`).join('')}
     ${logs.length?'':'<div class="empty"><b>첫 일기를 기다리고 있어요</b>여섯 명이 하루에 한 줄씩이면 여섯 개의 시선이 모입니다.</div>'}`;
   $$('[data-w]',v).forEach(b=>b.onclick=()=>{logDraft.weather=logDraft.weather===b.dataset.w?'':b.dataset.w;$$('[data-w]',v).forEach(x=>x.classList.toggle('on',x.dataset.w===logDraft.weather))});
@@ -1097,6 +1117,7 @@ function rLog(v){
   };
   $$('[data-lx]',v).forEach(b=>b.onclick=()=>ask('이 일기를 지울까요? 사진은 앨범에 남아요.','지우기',()=>remove('log',b.dataset.lx)));
   $$('[data-le]',v).forEach(b=>b.onclick=()=>editLog(b.dataset.le));
+  $$('[data-lo]',v).forEach(b=>b.onclick=()=>openViewer(ph.filter(p=>p.log===b.dataset.lo),Number(b.dataset.k)));
 }
 
 function editLog(id){
@@ -1232,17 +1253,51 @@ async function staticMap(pts,W=720,H=420){
 }
 
 /* ---- 5 앨범 ---- */
+let albumWho='all';
 function rAlbum(v){
-  const ds=days(),ph=photos();const by={};ph.forEach(p=>(by[p.day??'x']=by[p.day??'x']||[]).push(p));
+  const ds=days(),all_=photos();
+  const counts={};all_.forEach(p=>counts[p.author]=(counts[p.author]||0)+1);
+  if(albumWho!=='all'&&!counts[albumWho])albumWho='all';
+  const ph=albumWho==='all'?all_:all_.filter(p=>p.author===albumWho);
+  const by={};ph.forEach(p=>(by[p.day??'x']=by[p.day??'x']||[]).push(p));
   const keys=Object.keys(by).sort((a,b)=>(a==='x')-(b==='x')||a-b);
+  const order=keys.flatMap(k=>by[k]);
+  const who=members().filter(m=>counts[m.id]);
   v.innerHTML=chapHead('album','날짜별로 모인 사진입니다.<br>사진 아래에 한 줄을 적으면 책의 사진 설명이 돼요.')+`
     <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진 추가<input type="file" class="file" id="aF" accept="image/*" multiple></label></div>
+    ${who.length>1||albumWho!=='all'?`<div class="whochips" role="group" aria-label="사람별 보기"><button data-aw="all" class="${albumWho==='all'?'on':''}">전체 ${all_.length}</button>${who.map(m=>`<button data-aw="${m.id}" class="${albumWho===m.id?'on':''}">${face(m,22)}${esc(m.name)} ${counts[m.id]}</button>`).join('')}</div>`:''}
     ${keys.map(k=>`<div class="day-h"><b>${k==='x'?'날짜 없음':Number(k)+1+'일째'}</b><span>${ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${by[k].length}장</span></div>
-      <div class="album">${by[k].map(p=>`<figure><img src="${esc(mediaUrl(p.path))}" alt="" loading="lazy"><input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="사진 설명" aria-label="사진 설명"><div class="meta"><span>${esc(nameOf(p.author))}</span><button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button></div></figure>`).join('')}</div>`).join('')}
-    ${ph.length?'':'<div class="empty"><b>아직 사진이 없어요</b>여행일기에 올린 사진도 여기에 모입니다.</div>'}`;
+      <div class="album">${by[k].map(p=>`<figure><button class="ph-open" data-open="${order.indexOf(p)}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy"></button><input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="사진 설명" aria-label="사진 설명"><div class="meta"><span>${esc(nameOf(p.author))}</span><button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button></div></figure>`).join('')}</div>`).join('')}
+    ${all_.length?'':'<div class="empty"><b>아직 사진이 없어요</b>여행일기에 올린 사진도 여기에 모입니다.</div>'}`;
   bindAuto(v);
+  $$('[data-aw]',v).forEach(b=>b.onclick=()=>{albumWho=b.dataset.aw;render()});
+  $$('[data-open]',v).forEach(b=>b.onclick=()=>openViewer(order,Number(b.dataset.open)));
   $('#aF').onchange=async e=>{const fs=[...e.target.files];if(!fs.length)return;const n=(await addPhotos(fs,{day:Number($('#aD').value)||0})).length;if(n)toast(`${n}장 추가했어요`);render()};
   $$('[data-mx]',v).forEach(b=>b.onclick=()=>ask('이 사진을 지울까요?','지우기',async()=>{const p=one('media',b.dataset.mx);await remove('media',b.dataset.mx);if(p?.path)BE.delBlob(p.path)}));
+}
+/* 사진 크게 보기: 넘기기(밀기, 화살표), 닫기(✕, Esc, 배경 누르기) */
+function openViewer(list,idx){
+  if(!list.length)return;
+  let i=Math.max(0,Math.min(list.length-1,idx));
+  const el=document.createElement('div');el.className='viewer';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','사진 크게 보기');
+  el.innerHTML=`<div class="vtop"><span class="vcount"></span><button class="vx" aria-label="닫기">✕</button></div><div class="vstage"><img alt=""></div><button class="vnav vprev" aria-label="이전 사진">‹</button><button class="vnav vnext" aria-label="다음 사진">›</button><div class="vcap"></div>`;
+  document.body.appendChild(el);document.body.style.overflow='hidden';
+  const img=el.querySelector('img');
+  const show=()=>{const p=list[i];img.src=mediaUrl(p.path);img.alt=p.caption||'';
+    el.querySelector('.vcount').textContent=`${i+1} / ${list.length}`;
+    el.querySelector('.vcap').innerHTML=`${p.caption?`<b>${esc(p.caption)}</b>`:''}<span>${esc(nameOf(p.author))}${p.day!=null?`, ${p.day+1}일째`:''}</span>`;
+    el.querySelector('.vprev').style.visibility=i>0?'visible':'hidden';el.querySelector('.vnext').style.visibility=i<list.length-1?'visible':'hidden';
+    [list[i-1],list[i+1]].forEach(q=>{if(q){const pre=new Image();pre.src=mediaUrl(q.path)}})};
+  const go=d=>{const n=i+d;if(n<0||n>=list.length)return;i=n;show()};
+  const close=()=>{document.removeEventListener('keydown',key);el.remove();document.body.style.overflow=''};
+  const key=e=>{if(e.key==='Escape')close();else if(e.key==='ArrowLeft')go(-1);else if(e.key==='ArrowRight')go(1)};
+  document.addEventListener('keydown',key);
+  el.querySelector('.vx').onclick=close;el.querySelector('.vprev').onclick=e=>{e.stopPropagation();go(-1)};el.querySelector('.vnext').onclick=e=>{e.stopPropagation();go(1)};
+  const stage=el.querySelector('.vstage');let sx=null,sy=null;
+  stage.onpointerdown=e=>{sx=e.clientX;sy=e.clientY};
+  stage.onpointerup=e=>{if(sx==null)return;const dx=e.clientX-sx,dy=e.clientY-sy;sx=null;
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy))go(dx<0?1:-1);else if(Math.abs(dx)<8&&Math.abs(dy)<8&&e.target===stage)close()};
+  show();el.querySelector('.vx').focus();
 }
 
 /* ---- 6 소회 ---- */
