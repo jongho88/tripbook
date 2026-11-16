@@ -180,6 +180,11 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .tl .dot.ok{background:var(--cobalt)}
 .tl li.cand .tm,.tl li.cand .pl,.tl li.cand .nt,.tl li.cand .faint{opacity:.45}.tl li.cand .dot{opacity:.5}
 
+.tbox{position:relative;display:inline-block;flex:0 0 auto}
+.tbox .in{width:140px}
+.tbox .tph{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--ink3);pointer-events:none}
+.tbox .in.has+.tph,.tbox .in:focus+.tph{display:none}
+.tbox .in:not(.has):not(:focus)::-webkit-datetime-edit{color:transparent}
 /* ---------- log ---------- */
 .wx{display:flex;gap:2px;flex-wrap:wrap}
 .wx button{font-size:22px;width:42px;height:42px;border-radius:12px}
@@ -1033,8 +1038,9 @@ function rPlan(v){
       ${isOwner||canDel?`<div class="row" style="gap:6px;margin-top:8px">${isOwner?`<button class="btn ${it.confirmed?'quiet':'line'} sm" data-ok="${it.id}">${it.confirmed?'확정 취소':'확정'}</button>`:''}${canDel?`<button class="btn quiet sm" data-px="${it.id}">지우기</button>`:''}</div>`:''}
       </div></li>`}).join('')}</ol>
     ${items.length?(anyOk?'<p class="small faint" style="margin:-6px 0 6px">흐리게 보이는 일정은 확정되지 않은 후보예요. 책에는 확정된 일정만 들어갑니다.</p>':''):'<div class="empty"><b>이날은 아직 비어 있어요</b>아래에서 시간과 장소를 넣어 주세요. 같은 시간에 후보를 여러 개 올려도 됩니다.</div>'}
-    <div class="block"><h3>일정 추가</h3><div class="row"><input class="in" type="time" id="nTm" style="width:auto" aria-label="시간"><input class="in grow" id="nPl" placeholder="장소나 할 일 (예: Muir Woods)" aria-label="장소"></div><input class="in" id="nNt" placeholder="메모 (선택)" style="margin-top:8px" aria-label="메모"><div class="sp"></div><button class="btn" id="nAdd">일정 추가</button></div>`;
+    <div class="block"><h3>일정 추가</h3><div class="row"><label class="tbox"><input class="in" type="time" id="nTm" aria-label="시간"><span class="tph">시간</span></label><input class="in grow" id="nPl" placeholder="장소나 할 일 (예: Muir Woods)" aria-label="장소"></div><input class="in" id="nNt" placeholder="메모 (선택)" style="margin-top:8px" aria-label="메모"><div class="sp"></div><button class="btn" id="nAdd">일정 추가</button></div>`;
   $$('[data-d]',v).forEach(b=>b.onclick=()=>{planDay=Number(b.dataset.d);render()});
+  {const t=$('#nTm');const f=()=>t.classList.toggle('has',!!t.value);['input','change','blur'].forEach(e=>t.addEventListener(e,f));f()}
   $('#thm').onblur=e=>{if(e.target.value!==theme)put('theme','d'+planDay,{text:e.target.value},{silent:true})};
   $('#nAdd').onclick=()=>{const pl=$('#nPl').value.trim();if(!pl){toast('장소나 할 일을 적어 주세요');return}put('plan',uid(8),{day:planDay,time:$('#nTm').value,place:pl,note:$('#nNt').value.trim(),author:myId||null})};
   const vote=(id,val)=>{if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return}const k=id+'__'+myId;const cur=one('vote',k);const now=cur?voteOf(cur):0;put('vote',k,{item:id,member:myId,v:now===val?0:val})};
