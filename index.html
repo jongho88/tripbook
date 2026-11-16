@@ -336,8 +336,8 @@ const CHAPS=[
   {k:'people',n:1,t:'사람들'},
   {k:'prep',n:2,t:'준비'},
   {k:'plan',n:3,t:'계획'},
-  {k:'log',n:4,t:'여행 일기'},
-  {k:'map',n:5,t:'위치 기록'},
+  {k:'log',n:4,t:'여행일기'},
+  {k:'map',n:5,t:'위치기록'},
   {k:'album',n:6,t:'앨범'},
   {k:'refl',n:7,t:'소회'},
   {k:'money',t:'정산'},
@@ -883,8 +883,8 @@ function rCover(v){
     ['people',1,'사람들',ms.length?`${ms.length}명`:'아직 없음'],
     ['prep',2,'준비',prep.length?`예약 ${prep.length}건 중 ${prep.filter(p=>p.status==='done').length}건 확정`:'예약 카드 없음'],
     ['plan',3,'계획',plans.length?`일정 ${plans.length}개`:'일정 없음'],
-    ['log',4,'여행 일기',logs.length?`${logs.length}편`:'여행 중에 써요'],
-    ['map',5,'위치 기록',all('loc').length?`${all('loc').length}곳`:'여행 중에 기록해요'],
+    ['log',4,'여행일기',logs.length?`${logs.length}편`:'여행 중에 써요'],
+    ['map',5,'위치기록',all('loc').length?`${all('loc').length}곳`:'여행 중에 기록해요'],
     ['album',6,'앨범',ph.length?`사진 ${ph.length}장`:'사진 없음'],
     ['refl',7,'소회',`${refl.length}/${ms.length||0}명 작성`],
     ['money',null,'정산',ex.length?won(ex.reduce((s,e)=>s+e.amount,0)):'지출 없음']
@@ -1065,7 +1065,7 @@ function rPlan(v){
   $$('[data-px]',v).forEach(b=>b.onclick=()=>{const it=one('plan',b.dataset.px);ask(`「${it.place}」을(를) 일정에서 지울까요?`,'지우기',()=>remove('plan',b.dataset.px))});
 }
 
-/* ---- 4 여행 일기 ---- */
+/* ---- 4 여행일기 ---- */
 function rLog(v){
   const ds=days(),ti=Math.max(0,todayIdx());
   const logs=all('log').sort((a,b)=>(a.day-b.day)||(a.created||0)-(b.created||0));
@@ -1129,7 +1129,7 @@ function editLog(id){
   };
 }
 
-/* ---- 위치 기록 ---- */
+/* ---- 위치기록 ---- */
 const TILE='https://tile.openstreetmap.org/';
 const lon2x=(lon,z)=>(lon+180)/360*256*Math.pow(2,z);
 const lat2y=(lat,z)=>{const r=lat*Math.PI/180;return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*256*Math.pow(2,z)};
@@ -1182,12 +1182,12 @@ function rMap(v){
     <button class="btn recbtn" id="recBtn">📍 현재 위치 기록</button>
     <p class="small muted" id="recMsg" style="margin:8px 2px 0;min-height:1.4em"></p>
     <div class="dchips"><button data-md="all" class="${mapDay==='all'?'on':''}">전체 ${L.length}</button>${ds.map(d=>`<button data-md="${d.i}" class="${String(mapDay)===String(d.i)?'on':''}" ${has(d.i)?'':'style="opacity:.5"'}>${d.i+1}일째 ${d.md}</button>`).join('')}${has('x')?`<button data-md="x" class="${mapDay==='x'?'on':''}">여행 날짜 밖</button>`:''}</div>
-    <div class="mapbox" id="mapBox" aria-label="위치 기록 지도"></div>
+    <div class="mapbox" id="mapBox" aria-label="위치기록 지도"></div>
     <div style="margin-top:14px">${shown.length?groupLocs(shown).map(([k,arr])=>`<div class="day-h"><b>${k==='x'?'여행 날짜 밖':(Number(k)+1)+'일째'}</b><span>${k!=='x'&&ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${arr.length}곳</span></div>
       ${arr.map(l=>`<div class="locrow">${face(member(l.author),34)}<div><div><span class="tm">${hhmm(l.at)}</span> <span class="nm">${esc(l.name||'이름 없는 곳')}</span></div><div class="meta">${esc(nameOf(l.author))}${l.acc?`, 오차 약 ${l.acc<1000?Math.round(l.acc)+'m':(l.acc/1000).toFixed(1)+'km'}`:''}</div></div>${l.author===myId||isOwner?`<button class="btn quiet sm" data-lx="${l.id}">지우기</button>`:''}</div>`).join('')}`).join(''):'<div class="empty"><b>아직 기록한 곳이 없어요</b>여행지에 도착하면 위의 버튼을 눌러 주세요.</div>'}</div>`;
   mountMap($('#mapBox'),shown);
   $$('[data-md]',v).forEach(b=>b.onclick=()=>{mapDay=b.dataset.md==='all'||b.dataset.md==='x'?b.dataset.md:Number(b.dataset.md);render()});
-  $$('[data-lx]',v).forEach(b=>b.onclick=()=>ask('이 위치 기록을 지울까요?','지우기',()=>remove('loc',b.dataset.lx)));
+  $$('[data-lx]',v).forEach(b=>b.onclick=()=>ask('이 위치기록을 지울까요?','지우기',()=>remove('loc',b.dataset.lx)));
   $('#recBtn').onclick=recordHere;
 }
 function groupLocs(arr){const g={};arr.forEach(l=>(g[l.day??'x']=g[l.day??'x']||[]).push(l));return Object.entries(g).sort((a,b)=>(a[0]==='x')-(b[0]==='x')||a[0]-b[0])}
@@ -1239,7 +1239,7 @@ function rAlbum(v){
     <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진 추가<input type="file" class="file" id="aF" accept="image/*" multiple></label></div>
     ${keys.map(k=>`<div class="day-h"><b>${k==='x'?'날짜 없음':Number(k)+1+'일째'}</b><span>${ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${by[k].length}장</span></div>
       <div class="album">${by[k].map(p=>`<figure><img src="${esc(mediaUrl(p.path))}" alt="" loading="lazy"><input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="사진 설명" aria-label="사진 설명"><div class="meta"><span>${esc(nameOf(p.author))}</span><button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button></div></figure>`).join('')}</div>`).join('')}
-    ${ph.length?'':'<div class="empty"><b>아직 사진이 없어요</b>여행 일기에 올린 사진도 여기에 모입니다.</div>'}`;
+    ${ph.length?'':'<div class="empty"><b>아직 사진이 없어요</b>여행일기에 올린 사진도 여기에 모입니다.</div>'}`;
   bindAuto(v);
   $('#aF').onchange=async e=>{const fs=[...e.target.files];if(!fs.length)return;const n=(await addPhotos(fs,{day:Number($('#aD').value)||0})).length;if(n)toast(`${n}장 추가했어요`);render()};
   $$('[data-mx]',v).forEach(b=>b.onclick=()=>ask('이 사진을 지울까요?','지우기',async()=>{const p=one('media',b.dataset.mx);await remove('media',b.dataset.mx);if(p?.path)BE.delBlob(p.path)}));
@@ -1430,10 +1430,10 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   let mi=0;const mk=Object.keys(lmap);
   for(const d of mk){mi++;onp(.92+.06*mi/mk.length,`지도 그리는 중 ${mi}/${mk.length}`);limg[d]=await staticMap(lmap[d])}
   const routeBlock=d=>{const arr=lmap[d];if(!arr)return'';return `<div class="route">${limg[d]?`<img src="${limg[d]}" alt="${Number(d)+1}일째 경로">`:''}<ol>${arr.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`};
-  b+=`<section>${chap(4,'여행 일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')}${wxInline(l.weather)}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
+  b+=`<section>${chap(4,'여행일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')}${wxInline(l.weather)}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const ab={};ph.forEach(p=>(ab[p.day??'x']=ab[p.day??'x']||[]).push(p));
   const lx=LL.filter(l=>l.day==null);
-  b+=`<section>${chap(5,'위치 기록')}${Object.keys(lmap).sort((a,c)=>a-c).map(d=>dh(Number(d))+routeBlock(d)).join('')}${lx.length?`<div class="dh"><b>여행 날짜 밖</b></div><div class="route"><ol>${lx.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`:''}${LL.length?'':'<p class="no">기록이 없어요</p>'}</section>`;
+  b+=`<section>${chap(5,'위치기록')}${Object.keys(lmap).sort((a,c)=>a-c).map(d=>dh(Number(d))+routeBlock(d)).join('')}${lx.length?`<div class="dh"><b>여행 날짜 밖</b></div><div class="route"><ol>${lx.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`:''}${LL.length?'':'<p class="no">기록이 없어요</p>'}</section>`;
   b+=`<section>${chap(6,'앨범')}${Object.keys(ab).sort((a,c)=>(a==='x')-(c==='x')||a-c).map(k=>(k==='x'?'<div class="dh"><b>그 밖의 순간들</b></div>':dh(Number(k)))+`<div class="grid album">${ab[k].map(fig).join('')}</div>`).join('')||'<p class="no">사진이 없어요</p>'}</section>`;
   b+=`<section>${chap(7,'소회')}${ms.map(x=>{const r=one('refl',x.id)||{};const qs=REFLQ.filter(([k])=>r[k]);return `<article class="rf"><div class="rh">${F(x,52)}<h3>${esc(x.name)}</h3></div>${qs.length?qs.map(([k,q])=>`<h4>${q}</h4><p>${esc(r[k])}</p>`).join(''):'<p class="no">쓰지 않았어요</p>'}</article>`}).join('')}</section>`;
   b+=`<section>${chap('','정산')}<p class="tot"><b>${won(total)}</b> ${ms.length?`<span>한 사람당 평균 ${won(total/ms.length)}</span>`:''}</p>
