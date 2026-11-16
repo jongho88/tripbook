@@ -342,6 +342,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 총무의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
+const APP_VERSION='11.15-저녁';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -638,6 +639,7 @@ function rWelcome(){
     <hr class="rule">
     <label class="lab" for="wLink" style="margin-top:0">초대 링크를 받으셨나요?</label>
     <div class="row"><input class="in grow" id="wLink" placeholder="받은 초대 링크를 여기에 붙여넣기" autocomplete="off"><button class="btn line" id="wGoLink">들어가기</button></div>
+    <p class="small faint" style="margin-top:28px;text-align:center">버전 ${APP_VERSION}</p>
   </main>`;
   $('#wGoLink').onclick=()=>{const j=parseJoin($('#wLink').value.trim());if(!j){toast('초대 링크가 맞는지 확인해 주세요');return}LS.set('tb.join',j);boot()};
   $('#goLocal').onclick=async()=>{cfg={mode:'local'};LS.set('tb.cfg',cfg);await boot()};
@@ -944,7 +946,8 @@ function rCover(v){
       <div class="grow"><label class="lab" for="fB">돌아오는 날</label><input class="in" type="date" id="fB" data-f="trip/meta/end" data-rerender="1" value="${esc(m.end||'')}"></div></div>
       <label class="lab">표지 사진</label>
       <div class="row"><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="fC"></label>${m.cover?`<button class="btn quiet sm" id="fCx">표지 사진 빼기</button>`:''}</div>
-    </div>`;
+    </div>
+    <p class="small faint" style="margin-top:22px;text-align:center">여행모아 버전 ${APP_VERSION}</p>`;
   $$('[data-go]',v).forEach(b=>b.onclick=()=>go(b.dataset.go));
   bindA2hs();
   bindAuto(v);
@@ -1394,7 +1397,7 @@ function meMenu(){
       ${remote&&!isOwner?'<button class="btn line" id="mmAdmin">총무 되기</button>':''}
       ${remote?'<button class="btn quiet" id="mmLeave">이 기기에서 나가기</button>':''}
       <button class="btn quiet" id="mmX">닫기</button>
-    </div>${remote?'<p class="small faint" style="margin-top:10px">나가기는 이 기기에서만 빠지는 것이고, 쓴 글은 그대로 남아요. 다시 들어오려면 초대 링크와 입장 비밀번호가 필요해요.</p>':''}`);
+    </div><p class="small faint" style="margin-top:14px;text-align:center">여행모아 버전 ${APP_VERSION}</p>${remote?'<p class="small faint" style="margin-top:10px">나가기는 이 기기에서만 빠지는 것이고, 쓴 글은 그대로 남아요. 다시 들어오려면 초대 링크와 입장 비밀번호가 필요해요.</p>':''}`);
   $('#mmX').onclick=closeSheet;
   $('#mmName').onclick=()=>{closeSheet();myId=null;LS.del('tb.me.'+(cfg.trip||'local'));$('#root').innerHTML='';render()};
   const a=$('#mmAdmin');if(a)a.onclick=becomeAdmin;
