@@ -373,7 +373,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-오늘';
+const APP_VERSION='11.16-표지';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -952,6 +952,7 @@ function activeToday(){const t=new Date();const same=ms=>{if(!ms)return false;co
   [['log','author','created'],['loc','author','at'],['media','author','created'],['prep','by'],['plan','author','created'],['check','by','created'],['expense','by','created'],['vote','member'],['react','member'],['refl',null,'saved']].forEach(([c,f,tf])=>
     all(c).forEach(r=>{const who=f?r[f]:r.id;if(same((tf&&r[tf])||r._t))set.add(who)}));
   set.delete(null);set.delete(undefined);set.delete('');const ids=new Set(members().map(m=>m.id));return new Set([...set].filter(x=>ids.has(x)))}
+let infoOpen=false;
 function rCover(v){
   const todayActive=activeToday();
   const m=meta(),ms=members(),st=status(),ds=days();
@@ -982,10 +983,10 @@ function rCover(v){
       <div class="stub"><div><div class="tk-big">${esc(st.big)}</div><div class="tk-k" style="margin-top:6px">${esc(st.small)}</div></div></div>
     </div>
     <div style="height:30px"></div>
-    <h3 style="font-size:15px;color:var(--ink2);font-weight:700;margin-bottom:2px">차례</h3>
-    <ol class="toc">${toc.map(([k,n,t,s])=>`<li><button data-go="${k}"><span class="n">${n??''}</span><span class="t">${t}</span><span class="s">${esc(s)}</span></button></li>`).join('')}</ol>
-    <div class="block" style="margin-top:28px">
-      <h3>여행 정보</h3>
+    <div class="block infoc" style="margin-top:0">
+      <div class="row" style="align-items:center;gap:10px"><div class="grow small muted" style="line-height:1.6">제목, 여행지, 날짜, 정산 통화, 표지 사진</div>
+      <button class="btn line sm" id="infoT" aria-expanded="${infoOpen}">${infoOpen?'접기':'여행 정보 고치기'}</button></div>
+      ${infoOpen?`<div class="sp"></div>
       <label class="lab" for="fT">여행 제목</label><input class="in" id="fT" data-f="trip/meta/title" value="${esc(m.title||'')}" placeholder="예: 여섯이서 요세미티">
       <label class="lab" for="fS">한 줄 소개</label><input class="in" id="fS" data-f="trip/meta/sub" value="${esc(m.sub||'')}" placeholder="예: 대학 동기 여섯, 십 년 만의 로드트립">
       <label class="lab" for="fCur">정산 통화</label>${curSelect('fCur')}
@@ -994,10 +995,11 @@ function rCover(v){
       <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="fA">출발일</label><input class="in" type="date" id="fA" data-f="trip/meta/start" data-rerender="1" value="${esc(m.start||'')}"></div>
       <div class="grow"><label class="lab" for="fB">돌아오는 날</label><input class="in" type="date" id="fB" data-f="trip/meta/end" data-rerender="1" value="${esc(m.end||'')}"></div></div>
       <label class="lab">표지 사진</label>
-      <div class="row"><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="fC"></label>${m.cover&&canDel(m.coverBy)?`<button class="btn quiet sm" id="fCx">표지 사진 빼기</button>`:''}</div>
+      <div class="row"><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="fC"></label>${m.cover&&canDel(m.coverBy)?`<button class="btn quiet sm" id="fCx">표지 사진 빼기</button>`:''}</div>`:''}
     </div>
     <p class="small faint" style="margin-top:22px;text-align:center">여행모아 버전 ${APP_VERSION}</p>`;
   $$('[data-go]',v).forEach(b=>b.onclick=()=>go(b.dataset.go));
+  $('#infoT',v).onclick=()=>{infoOpen=!infoOpen;rCover(v);if(infoOpen)$('#fT',v)?.focus()};
   if(!coverDropped&&ms.length){coverDropped=true}
   $$('[data-cf]',v).forEach(b=>b.onclick=()=>{
     const m=member(b.dataset.cf);$$('.cf-tip',v).forEach(x=>x.remove());
@@ -1008,7 +1010,7 @@ function rCover(v){
   });
   bindA2hs();
   bindAuto(v);
-  $('#fC').onchange=async e=>{const f=e.target.files[0];if(!f)return;toast('표지 사진 올리는 중…',8000);try{const {path}=await savePhoto(await shrink(f,2000,.85));await patch('trip','meta',{cover:path,coverBy:myId||null});toast('표지 사진을 바꿨어요')}catch(err){toast('올리지 못했어요: '+err.message)}};
+  if($('#fC'))$('#fC').onchange=async e=>{const f=e.target.files[0];if(!f)return;toast('표지 사진 올리는 중…',8000);try{const {path}=await savePhoto(await shrink(f,2000,.85));await patch('trip','meta',{cover:path,coverBy:myId||null});toast('표지 사진을 바꿨어요')}catch(err){toast('올리지 못했어요: '+err.message)}};
   const cx=$('#fCx');if(cx)cx.onclick=()=>patch('trip','meta',{cover:null});
 }
 
