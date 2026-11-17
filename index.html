@@ -373,7 +373,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-반응하나';
+const APP_VERSION='11.16-소수점';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1166,7 +1166,7 @@ function editPrep(id,type){
     <label class="lab" for="qT">무엇을 예약했나요</label><input class="in" id="qT" value="${esc(p.title||'')}" placeholder="${ph}">
     <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qD">${(PREPD[p.type]||PREPD.etc)[0]}</label><input class="in" type="date" id="qD" value="${esc(p.date||'')}"></div><div class="grow"><label class="lab" for="qD2">${(PREPD[p.type]||PREPD.etc)[1]}</label><input class="in" type="date" id="qD2" value="${esc(p.date2||'')}" min="${esc(p.date||'')}"></div></div>
     <p class="small muted" id="qDn" style="margin:4px 0 0"></p>
-    <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qC">금액</label><input class="in" type="number" inputmode="numeric" id="qC" value="${esc(p.cost||'')}" step="${curDigits()?'0.01':'1'}" inputmode="${curDigits()?'decimal':'numeric'}" placeholder="${esc(curSymbol())}"></div></div>
+    <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qC">금액</label><input class="in" type="number" id="qC" value="${esc(p.cost||'')}" step="${curDigits()?'0.01':'1'}" inputmode="${curDigits()?'decimal':'numeric'}" placeholder="${esc(curSymbol())}"></div></div>
     <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qP">결제한 사람</label><select class="sel" id="qP"><option value="">-</option>${members().map(m=>`<option value="${m.id}" ${p.payer===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div class="grow"><label class="lab">상태</label><div class="seg" id="qS">${[['none','미정'],['wait','대기'],['done','확정']].map(([k,t])=>`<button data-s="${k}" class="${(p.status||'none')===k?'on':''}">${t}</button>`).join('')}</div></div></div>
     <label class="lab" for="qK">예약번호</label><input class="in" id="qK" value="${esc(p.code||'')}">
