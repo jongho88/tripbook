@@ -382,7 +382,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-공금';
+const APP_VERSION='11.16-권한';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1100,7 +1100,7 @@ function rPeople(v){
     <div class="people" style="margin-top:8px">${ms.map(m=>`<div class="person">${face(m,76)}<div>
       <div class="nm" style="color:${mcol(m)}">${esc(m.name)}</div><div class="rl">${esc(m.role||'역할 미정')}</div>
       <p class="hp ${m.hope?'':'empty'}">${m.hope?esc(m.hope):'이번 여행에서 기대하는 것을 적어 주세요'}</p>
-      <div class="act"><button class="btn quiet sm" data-ed="${m.id}">${m.id===myId?'내 소개 쓰기':'고치기'}</button></div></div></div>`).join('')}</div>
+      ${m.id===myId||canDel(m.by)?`<div class="act"><button class="btn quiet sm" data-ed="${m.id}">${m.id===myId?'내 소개 쓰기':'고치기'}</button></div>`:''}</div></div>`).join('')}</div>
     ${ms.length?'':'<div class="empty"><b>아직 아무도 없어요</b>함께 가는 사람의 이름을 하나씩 추가해 주세요.</div>'}`;
   const add=async()=>{const n=$('#pName').value.trim();if(!n)return;const id=uid(8);await put('member',id,{name:n,color:COLORS[ms.length%COLORS.length],order:nextOrder(),by:myId||id});if(!myId&&!ms.length){myId=id;LS.set('tb.me.'+(cfg.trip||'local'),id)}toast(`${n} 님을 추가했어요`);setTimeout(()=>$('#pName')?.focus(),0)};
   $('#pAdd').onclick=add;$('#pName').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)add()};
@@ -1108,7 +1108,7 @@ function rPeople(v){
   $$('[data-ed]',v).forEach(b=>b.onclick=()=>editPerson(b.dataset.ed));
 }
 function editPerson(id){
-  const m=member(id);let color=mcol(m),img=null,crop=null,changed=false;
+  const m=member(id);if(!(id===myId||canDel(m.by))){toast('본인, 적은 사람, 관리자만 고칠 수 있어요');return}let color=mcol(m),img=null,crop=null,changed=false;
   openSheet(`<h2>${esc(m.name)}</h2>
     <label class="lab">얼굴 사진</label>
     <div class="caric"><canvas id="cv" width="440" height="440" style="touch-action:none;cursor:grab" aria-label="얼굴 사진 미리 보기"></canvas>
@@ -1198,6 +1198,7 @@ function editPrep(id,type){
     <p class="small muted" id="qShN" style="margin-top:6px"></p>
     <div class="sp"></div><div class="row"><button class="btn grow" id="qSave">저장</button><button class="btn quiet" id="qNo">닫기</button></div>
     ${id&&canDel(p.by)?'<div style="margin-top:18px"><button class="btn danger sm" id="qDel">이 카드 지우기</button></div>':''}`);
+  const ro=!!id&&!canDel(p.by||p.payer);
   let sh=p.share||prepShare(p).mode;
   const shUi=()=>{const pool=$('#qP').value===POOL;if(pool)sh='all';$$('#qSh button').forEach(x=>{x.disabled=pool&&x.dataset.sh!=='all'});
     $$('#qSh button').forEach(x=>x.classList.toggle('on',x.dataset.sh===sh));$('#qSp').style.display=sh==='some'?'':'none';
@@ -1215,6 +1216,8 @@ function editPrep(id,type){
   $('#qSave').onclick=()=>{const d={by:p.by||(id?null:myId)||null,type:p.type,title:$('#qT').value.trim(),date:$('#qD').value,date2:($('#qD2').value&&$('#qD2').value>=$('#qD').value)?$('#qD2').value:'',cost:Number($('#qC').value)||0,payer:$('#qP').value||null,status:s,code:$('#qK').value.trim(),memo:$('#qM').value.trim(),share:sh,split:sh==='some'?$$('.qSx:checked').map(x=>x.value):[],expense:sh!=='me'};
     if(sh==='some'&&!d.split.length){toast('나눌 사람을 골라 주세요');return}
     closeSheet();put('prep',nid,d)};
+  if(ro){$$('#modal input,#modal select,#modal textarea').forEach(x=>x.disabled=true);$$('#modal .seg button').forEach(x=>x.disabled=true);
+    $('#qSave').remove();$('#modal h2').insertAdjacentHTML('afterend',`<p class="note" style="margin:8px 0 0">${esc(nameOf(p.by||p.payer))} 님이 적은 카드예요. 적은 사람과 관리자만 고칠 수 있어요.</p>`)}
 }
 
 /* ---- 3 계획 ---- */
@@ -1444,7 +1447,7 @@ function rAlbum(v){
     <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진 추가<input type="file" class="file" id="aF" accept="image/*" multiple></label></div>
     ${who.length>1||albumWho!=='all'?`<div class="whochips" role="group" aria-label="사람별 보기"><button data-aw="all" class="${albumWho==='all'?'on':''}">전체 ${all_.length}</button>${who.map(m=>`<button data-aw="${m.id}" class="${albumWho===m.id?'on':''}">${face(m,22)}${esc(m.name)} ${counts[m.id]}</button>`).join('')}</div>`:''}
     ${keys.map(k=>`<div class="day-h"><b>${k==='x'?'날짜 없음':Number(k)+1+'일째'}</b><span>${ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${by[k].length}장</span></div>
-      <div class="album">${by[k].map(p=>`<figure><button class="ph-open" data-open="${order.indexOf(p)}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy"></button><input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="사진 설명" aria-label="사진 설명">${reactBar(p.id)}<div class="meta"><span>${esc(nameOf(p.author))}</span>${canDel(p.author)?`<button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button>`:''}</div></figure>`).join('')}</div>`).join('')}
+      <div class="album">${by[k].map(p=>`<figure><button class="ph-open" data-open="${order.indexOf(p)}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy"></button>${canDel(p.author)?`<input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="사진 설명" aria-label="사진 설명">`:p.caption?`<p class="small" style="padding:6px 0;border-bottom:1.5px solid transparent">${esc(p.caption)}</p>`:''}${reactBar(p.id)}<div class="meta"><span>${esc(nameOf(p.author))}</span>${canDel(p.author)?`<button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button>`:''}</div></figure>`).join('')}</div>`).join('')}
     ${all_.length?'':'<div class="empty"><b>아직 사진이 없어요</b>여행일기에 올린 사진도 여기에 모입니다.</div>'}`;
   bindAuto(v);
   $$('[data-aw]',v).forEach(b=>b.onclick=()=>{albumWho=b.dataset.aw;render()});
