@@ -373,7 +373,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-표지사진';
+const APP_VERSION='11.16-반응하나';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1391,7 +1391,10 @@ async function staticMap(pts,W=720,H=420){
 const REACTS=[['heart','❤️','좋아요'],['laugh','😂','웃겨요'],['wow','😮','놀라워요']];
 function reactsFor(pid){const r={};REACTS.forEach(([k])=>r[k]=[]);all('react').forEach(x=>{if(x.item===pid&&x.on&&r[x.e])r[x.e].push(x.member)});return r}
 function reactBar(pid){const r=reactsFor(pid);return `<div class="reacts" data-rx="${pid}">${REACTS.map(([k,e,l])=>{const on=!!myId&&r[k].includes(myId),n=r[k].length;return `<button type="button" class="${on?'on':''}" data-re="${k}" aria-pressed="${on}" aria-label="${l} ${n}" title="${esc(r[k].map(nameOf).join(', '))}"><span class="re">${e}</span>${n||''}</button>`}).join('')}</div>`}
-function toggleReact(pid,k){if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return false}const id=pid+'__'+myId+'__'+k;const cur=one('react',id);put('react',id,{item:pid,member:myId,e:k,on:!(cur&&cur.on)},{silent:true});return true}
+function toggleReact(pid,k){if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return false}const id=pid+'__'+myId+'__'+k;const cur=one('react',id);const on=!(cur&&cur.on);
+  /* 한 사진에 한 사람은 반응 하나만: 새로 고르면 내가 고른 다른 반응은 꺼짐 */
+  if(on)REACTS.forEach(([o])=>{if(o===k)return;const oid=pid+'__'+myId+'__'+o;const r=one('react',oid);if(r&&r.on)put('react',oid,{item:pid,member:myId,e:o,on:false},{silent:true})});
+  put('react',id,{item:pid,member:myId,e:k,on},{silent:true});return true}
 function bindReacts(root,after){$$('[data-rx]',root).forEach(bar=>$$('[data-re]',bar).forEach(b=>b.onclick=e=>{e.stopPropagation();if(toggleReact(bar.dataset.rx,b.dataset.re))after(bar.dataset.rx)}))}
 let albumWho='all';
 function rAlbum(v){
