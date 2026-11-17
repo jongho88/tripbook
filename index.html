@@ -373,7 +373,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-질문별';
+const APP_VERSION='11.16-오늘';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -947,7 +947,11 @@ function go(k){view=k;history.replaceState(null,'','#'+k);render();window.scroll
 /* ---- 표지 ---- */
 let coverDropped=false;
 function activeToday(){const t=new Date();const same=ms=>{if(!ms)return false;const d=new Date(ms);return d.getFullYear()===t.getFullYear()&&d.getMonth()===t.getMonth()&&d.getDate()===t.getDate()};
-  const set=new Set();all('log').forEach(l=>{if(same(l.created))set.add(l.author)});all('loc').forEach(l=>{if(same(l.at))set.add(l.author)});all('media').forEach(p=>{if(same(p.created))set.add(p.author)});set.delete(null);set.delete(undefined);return set}
+  const set=new Set();
+  /* 오늘 무언가를 남긴 사람: 일기·위치·사진·준비·계획·체크·지출·뒤돌아보기·좋아요/반응 모두 */
+  [['log','author','created'],['loc','author','at'],['media','author','created'],['prep','by'],['plan','author','created'],['check','by','created'],['expense','by','created'],['vote','member'],['react','member'],['refl',null,'saved']].forEach(([c,f,tf])=>
+    all(c).forEach(r=>{const who=f?r[f]:r.id;if(same((tf&&r[tf])||r._t))set.add(who)}));
+  set.delete(null);set.delete(undefined);set.delete('');const ids=new Set(members().map(m=>m.id));return new Set([...set].filter(x=>ids.has(x)))}
 function rCover(v){
   const todayActive=activeToday();
   const m=meta(),ms=members(),st=status(),ds=days();
