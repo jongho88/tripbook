@@ -146,6 +146,11 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 /* stamp */
 .stamp{display:inline-grid;place-items:center;width:62px;height:62px;border-radius:50%;border:2.5px solid currentColor;color:var(--cobalt);font-weight:800;font-size:14px;transform:rotate(-12deg);box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 4.5px currentColor}
 .stamp.off{color:var(--ink3)}
+.stamp.two{font-size:12.5px;line-height:1.12;text-align:center}
+.stamp.per{color:var(--red);border-radius:12px}
+.ticket.per{border-color:var(--line);box-shadow:inset 6px 0 0 var(--red)}.ticket.per .main{padding-left:24px}.ticket.per .stub::before,.ticket.per .stub::after{border-color:var(--line)}
+.tk-sub{font-size:11.5px;color:var(--ink2);margin-top:9px;line-height:1.35;text-align:center}.tk-sub b{color:var(--ink)}
+.tk-meta b{color:var(--ink);font-weight:800}
 .stamp.wait{color:#C2780E}
 
 /* ---------- people ---------- */
@@ -373,7 +378,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-소수점';
+const APP_VERSION='11.16-개인띠';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -389,6 +394,11 @@ const wxSvg=(w,sz=26,col='currentColor')=>`<svg viewBox="0 0 24 24" width="${sz}
 const wxInline=v=>{const w=wxFind(v);return w?`<span class="wxi">${wxSvg(w,18)}${w.n}</span>`:''};
 const wxPicker=(sel,attr='')=>`<div class="wx" role="group" aria-label="날씨" ${attr}>${WX.map(w=>`<button type="button" data-w="${w.k}" class="${wxFind(sel)?.k===w.k?'on':''}" aria-pressed="${wxFind(sel)?.k===w.k}">${wxSvg(w)}<span>${w.n}</span></button>`).join('')}</div>`;
 const PREP={stay:'숙박',flight:'항공',car:'렌트카',etc:'기타'};
+/* 누구 몫인가: all 모두 나눔, some 일부만, me 결제한 사람 혼자 (예전 카드: expense:false → me) */
+function prepShare(p){const all=members().map(m=>m.id);const mode=p.share||(p.expense===false?'me':'all');
+  if(mode==='me')return{mode,ids:p.payer?[p.payer]:[]};
+  if(mode==='some'){const ids=(p.split||[]).filter(x=>all.includes(x));return ids.length?{mode,ids}:{mode:'all',ids:all}}
+  return{mode:'all',ids:all}}
 const PREPD={stay:['체크인','체크아웃'],flight:['가는 날','오는 날'],car:['픽업','반납'],etc:['시작','끝']};
 function prepRange(p,full){if(!p.date)return '';const f=d=>full?d.replace(/-/g,'. '):d.slice(5).replace('-','.');
   if(!p.date2||p.date2===p.date)return f(p.date);const n=Math.round((new Date(p.date2)-new Date(p.date))/864e5);
@@ -1143,11 +1153,15 @@ function rPrep(v){
   const sum=items.reduce((s,p)=>s+(Number(p.cost)||0),0);
   v.innerHTML=chapHead('prep','숙박, 항공, 렌트카를 예약한 사람이 카드를 하나씩 남겨 주세요. 확정되면 도장이 찍힙니다.')+`
     <div class="row">${Object.entries(PREP).map(([k,t])=>`<button class="btn line sm" data-add="${k}">${t} 추가</button>`).join('')}</div>
-    <div class="tlist" style="margin-top:16px">${items.map(p=>`<button class="ticket" data-ed="${p.id}" style="text-align:left;width:100%">
+    <div class="tlist" style="margin-top:16px">${items.map(p=>`<button class="ticket${prepShare(p).mode==='me'?' per':''}" data-ed="${p.id}" style="text-align:left;width:100%">
       <div class="main"><div class="tk-type">${PREP[p.type]||'기타'}</div><div class="tk-title">${esc(p.title||'제목 없음')}</div>
-      <div class="tk-meta">${[prepRange(p),p.cost&&won(p.cost),p.payer&&nameOf(p.payer)+' 결제',p.code&&'예약번호 '+p.code].filter(Boolean).map(esc).join(', ')}</div>
-      ${p.memo?`<div class="tk-meta" style="margin-top:4px">${esc(p.memo)}</div>`:''}</div>
-      <div class="stub">${p.status==='done'?'<span class="stamp">확정</span>':p.status==='wait'?'<span class="stamp wait">대기</span>':'<span class="stamp off">미정</span>'}</div></button>`).join('')}</div>
+      <div class="tk-meta">${[esc(prepRange(p)),p.cost&&`<b>${esc(won(p.cost))}</b>`,p.payer&&`<b>${esc(nameOf(p.payer))}</b> 결제`,p.code&&esc('예약번호 '+p.code)].filter(Boolean).join(', ')}</div>
+      ${p.memo?`<div class="tk-meta" style="margin-top:4px">${esc(p.memo)}</div>`:''}
+      ${(()=>{const sh=prepShare(p);return sh.mode==='some'?`<div class="row" style="gap:6px;margin-top:8px;font-size:12px;color:var(--ink2)">${sh.ids.map(i=>`<span class="row" style="gap:4px">${face(member(i),20)}${esc(nameOf(i))}</span>`).join('')}</div>`:''})()}</div>
+      <div class="stub">${(()=>{const sh=prepShare(p),me=sh.mode==='me';
+        const st=p.status==='done'?(me?'<span class="stamp two per">개인<br>확정</span>':'<span class="stamp two">함께<br>확정</span>'):p.status==='wait'?'<span class="stamp wait">대기</span>':'<span class="stamp off">미정</span>';
+        const sub=me?(p.payer?`<b>${esc(nameOf(p.payer))}</b> 혼자`:'개인'):`${sh.ids.length}명 나눔${p.cost&&sh.ids.length?`<br>1인당 <b>${esc(won(Number(p.cost)/sh.ids.length))}</b>`:''}`;
+        return `<div>${st}<div class="tk-sub">${sub}</div></div>`})()}</div></button>`).join('')}</div>
     ${items.length?`<p style="margin-top:14px;text-align:right">예약 합계 <b class="hl">${won(sum)}</b></p>`:'<div class="empty"><b>예약 카드가 없어요</b>위의 버튼으로 첫 예약을 남겨 주세요.</div>'}
     <div class="block" style="margin-top:26px"><h3>챙길 것</h3>
       <ul class="checks">${checks.map(c=>`<li><input type="checkbox" aria-label="${esc(c.text)}" data-ck="${c.id}" ${c.done?'checked':''}><span class="grow ${c.done?'done':''}">${esc(c.text)}</span>${c.who?face(member(c.who),24):''}${canDel(c.by)?`<button class="btn quiet sm" data-cx="${c.id}" style="white-space:nowrap">지우기</button>`:''}</li>`).join('')}</ul>
@@ -1160,7 +1174,7 @@ function rPrep(v){
   $('#cAdd').onclick=add;$('#cT').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)add()};
 }
 function editPrep(id,type){
-  const p=id?one('prep',id):{type,status:'none',expense:true};const nid=id||uid(8);
+  const p=id?one('prep',id):{type,status:'none',expense:true,share:'all'};const nid=id||uid(8);
   const ph={stay:'예: Yosemite Valley Lodge 2박',flight:'예: JFK → SFO UA 1234 08:30',car:'예: Chevy Suburban 4일 (SFO 픽업)',etc:'예: 국립공원 연간 패스'}[p.type]||'';
   openSheet(`<h2>${PREP[p.type]||'기타'}</h2>
     <label class="lab" for="qT">무엇을 예약했나요</label><input class="in" id="qT" value="${esc(p.title||'')}" placeholder="${ph}">
@@ -1171,16 +1185,26 @@ function editPrep(id,type){
     <div class="grow"><label class="lab">상태</label><div class="seg" id="qS">${[['none','미정'],['wait','대기'],['done','확정']].map(([k,t])=>`<button data-s="${k}" class="${(p.status||'none')===k?'on':''}">${t}</button>`).join('')}</div></div></div>
     <label class="lab" for="qK">예약번호</label><input class="in" id="qK" value="${esc(p.code||'')}">
     <label class="lab" for="qM">메모</label><textarea class="ta" id="qM" style="min-height:64px" placeholder="체크인 시간, 주소, 주의할 점">${esc(p.memo||'')}</textarea>
-    <label class="row small" style="margin-top:12px"><input type="checkbox" id="qE" ${p.expense!==false?'checked':''} style="width:18px;height:18px;accent-color:var(--cobalt)"> 정산에 넣기 (모두 똑같이 나눔)</label>
+    <label class="lab">누구 몫인가요</label><div class="seg" id="qSh" style="display:flex">${[['all','모두 나눔'],['some','일부만'],['me','나만 (결제한 사람)']].map(([k,t])=>`<button type="button" data-sh="${k}" style="flex:1" class="${prepShare(p).mode===k||(k==='some'&&p.share==='some')?'on':''}">${t}</button>`).join('')}</div>
+    <div class="row" id="qSp" style="margin-top:10px;display:none">${members().map(m=>`<label class="chk"><input type="checkbox" class="qSx" value="${m.id}" ${(p.split||[]).includes(m.id)?'checked':''}>${face(m,22)}${esc(m.name)}</label>`).join('')}</div>
+    <p class="small muted" id="qShN" style="margin-top:6px"></p>
     <div class="sp"></div><div class="row"><button class="btn grow" id="qSave">저장</button><button class="btn quiet" id="qNo">닫기</button></div>
     ${id&&canDel(p.by)?'<div style="margin-top:18px"><button class="btn danger sm" id="qDel">이 카드 지우기</button></div>':''}`);
+  let sh=p.share||prepShare(p).mode;
+  const shUi=()=>{$$('#qSh button').forEach(x=>x.classList.toggle('on',x.dataset.sh===sh));$('#qSp').style.display=sh==='some'?'':'none';
+    const n=sh==='some'?$$('.qSx:checked').length:members().length,c=Number($('#qC').value)||0;
+    $('#qShN').innerHTML=sh==='me'?'정산에 넣지 않아요. 결제한 사람 혼자 부담해요.':sh==='some'?(n?`고른 ${n}명이 똑같이 나눠요${c?`, 1인당 <b>${esc(won(c/n))}</b>`:''}.`:'나눌 사람을 골라 주세요.'):`${n}명이 똑같이 나눠요${c&&n?`, 1인당 <b>${esc(won(c/n))}</b>`:''}.`};
+  $$('#qSh button').forEach(b=>b.onclick=()=>{sh=b.dataset.sh;if(sh==='some'&&!$$('.qSx:checked').length&&p.payer)$$('.qSx').forEach(x=>{if(x.value===($('#qP').value||p.payer))x.checked=true});shUi()});
+  $$('.qSx').forEach(x=>x.onchange=shUi);$('#qC').addEventListener('input',shUi);shUi();
   let s=p.status||'none';$$('#qS button').forEach(b=>b.onclick=()=>{s=b.dataset.s;$$('#qS button').forEach(x=>x.classList.toggle('on',x===b))});
   $('#qNo').onclick=closeSheet;
   const d=$('#qDel');if(d)d.onclick=()=>{closeSheet();remove('prep',nid)};
   const dn=()=>{const a=$('#qD').value,b=$('#qD2');b.min=a;if(a&&b.value&&b.value<a)b.value='';if(a&&!b.value&&document.activeElement!==b)b.dataset.auto='1';
     $('#qDn').textContent=a&&b.value&&b.value>a?prepRange({date:a,date2:b.value,type:p.type}).replace(/^.*\(/,'(').replace(/[()]/g,''):''};
   $('#qD').addEventListener('change',dn);$('#qD2').addEventListener('change',dn);$('#qD2').addEventListener('focus',()=>{const a=$('#qD').value,b=$('#qD2');if(a&&!b.value)b.value=a});dn();
-  $('#qSave').onclick=()=>{const d={by:p.by||(id?null:myId)||null,type:p.type,title:$('#qT').value.trim(),date:$('#qD').value,date2:($('#qD2').value&&$('#qD2').value>=$('#qD').value)?$('#qD2').value:'',cost:Number($('#qC').value)||0,payer:$('#qP').value||null,status:s,code:$('#qK').value.trim(),memo:$('#qM').value.trim(),expense:$('#qE').checked};closeSheet();put('prep',nid,d)};
+  $('#qSave').onclick=()=>{const d={by:p.by||(id?null:myId)||null,type:p.type,title:$('#qT').value.trim(),date:$('#qD').value,date2:($('#qD2').value&&$('#qD2').value>=$('#qD').value)?$('#qD2').value:'',cost:Number($('#qC').value)||0,payer:$('#qP').value||null,status:s,code:$('#qK').value.trim(),memo:$('#qM').value.trim(),share:sh,split:sh==='some'?$$('.qSx:checked').map(x=>x.value):[],expense:sh!=='me'};
+    if(sh==='some'&&!d.split.length){toast('나눌 사람을 골라 주세요');return}
+    closeSheet();put('prep',nid,d)};
 }
 
 /* ---- 3 계획 ---- */
@@ -1484,7 +1508,7 @@ function rRefl(v){
 /* ---- 정산 ---- */
 function expenseRows(){
   const ids=members().map(m=>m.id);
-  const fromPrep=all('prep').filter(p=>p.expense!==false&&p.cost&&p.payer).map(p=>({id:'p'+p.id,prep:true,day:null,payer:p.payer,amount:Number(p.cost),memo:p.title||PREP[p.type],split:ids}));
+  const fromPrep=all('prep').filter(p=>prepShare(p).mode!=='me'&&p.cost&&p.payer).map(p=>({id:'p'+p.id,prep:true,day:null,payer:p.payer,amount:Number(p.cost),memo:p.title||PREP[p.type],split:prepShare(p).ids}));
   const ex=all('expense').map(e=>({...e,amount:Number(e.amount)||0,split:(e.split||[]).filter(s=>ids.includes(s))})).map(e=>({...e,split:e.split.length?e.split:ids}));
   return [...fromPrep,...ex].sort((a,b)=>((a.day??-1)-(b.day??-1))||((a.created||0)-(b.created||0)));
 }
@@ -1648,7 +1672,7 @@ async function buildBook({embed=true,onp=()=>{}}={}){
     <div class="faces">${ms.map(x=>F(x,72)).join('')}</div>${m.cover&&src[m.cover]?`<div class="cph"><img src="${src[m.cover]}" alt=""></div>`:''}
     <div class="tk"><div class="tm"><div><small>여행지</small><b>${esc(m.place||'')}</b></div><div><small>기간</small><b>${esc(period)}</b></div><div><small>함께한 사람</small><b>${ms.length}명</b></div></div><div class="ts"><b>${ds.length}일</b></div></div></section>`;
   b+=`<section>${chap(1,'사람들')}<div class="people">${ms.map(x=>`<div class="pp">${F(x,92)}<div><h3 style="color:${mcol(x)}">${esc(x.name)}</h3><p class="rl">${esc(x.role||'')}</p>${x.hope?`<p>${esc(x.hope)}</p>`:''}</div></div>`).join('')}</div></section>`;
-  b+=`<section>${chap(2,'준비')}${prep.map(p=>`<div class="tk sm"><div class="tm1"><small>${PREP[p.type]||''}</small><b>${esc(p.title||'')}</b><p>${[prepRange(p,true),p.cost&&won(p.cost),p.payer&&nameOf(p.payer)+' 결제',p.code&&'예약번호 '+p.code].filter(Boolean).map(esc).join(', ')}</p>${p.memo?`<p>${esc(p.memo)}</p>`:''}</div><div class="ts">${p.status==='done'?'<span class="stamp">확정</span>':''}</div></div>`).join('')||'<p class="no">기록이 없어요</p>'}
+  b+=`<section>${chap(2,'준비')}${prep.map(p=>`<div class="tk sm"><div class="tm1"><small>${PREP[p.type]||''}</small><b>${esc(p.title||'')}</b><p>${[prepRange(p,true),(()=>{const sh=prepShare(p);return sh.mode==='me'?'개인':sh.ids.length+'명 나눔'})(),p.cost&&won(p.cost),p.payer&&nameOf(p.payer)+' 결제',p.code&&'예약번호 '+p.code].filter(Boolean).map(esc).join(', ')}</p>${p.memo?`<p>${esc(p.memo)}</p>`:''}</div><div class="ts">${p.status==='done'?'<span class="stamp">확정</span>':''}</div></div>`).join('')||'<p class="no">기록이 없어요</p>'}
     ${checks.length?`<h3 class="h3">챙긴 것</h3><ul class="cks">${checks.map(c=>`<li>${c.done?'☑':'☐'} ${esc(c.text)}${c.who?` <small>${nm(c.who)}</small>`:''}</li>`).join('')}</ul>`:''}</section>`;
   b+=`<section>${chap(3,'계획')}${ds.map(d=>{let its=all('plan').filter(p=>p.day===d.i).sort((a,c)=>(a.time||'99').localeCompare(c.time||'99'));if(its.some(i=>i.confirmed))its=its.filter(i=>i.confirmed);const th=one('theme','d'+d.i)?.text;if(!its.length&&!th)return'';return dh(d.i)+(th?`<p class="theme">${esc(th)}</p>`:'')+`<ol class="tl">${its.map(i=>{const {up,down}=votesFor(i.id);return `<li><span class="t">${esc(i.time||'')}</span><div><b>${esc(i.place)}</b>${i.note?`<p>${esc(i.note)}</p>`:''}${up.length||down.length?`<p class="vs">${up.length?`좋아요: ${up.map(x=>esc(nameOf(x))).join(', ')}`:''}${up.length&&down.length?'<br>':''}${down.length?`아쉬워요: ${down.map(x=>esc(nameOf(x))).join(', ')}`:''}</p>`:''}</div></li>`}).join('')}</ol>`}).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const lg={};logs.forEach(l=>(lg[l.day]=lg[l.day]||[]).push(l));
