@@ -151,6 +151,10 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .ticket.per{border-color:var(--line);box-shadow:inset 6px 0 0 var(--red)}.ticket.per .main{padding-left:24px}.ticket.per .stub::before,.ticket.per .stub::after{border-color:var(--line)}
 .tk-sub{font-size:11.5px;color:var(--ink2);margin-top:9px;line-height:1.35;text-align:center}.tk-sub b{color:var(--ink)}
 .tk-meta b{color:var(--ink);font-weight:800}
+.fund{background:var(--bg);border-radius:12px;padding:4px 14px;margin-top:14px}
+.fund div{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line2)}.fund div:last-child{border-bottom:0}
+.fund span{font-size:14px;color:var(--ink2)}.fund b{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fund .neg b{color:var(--red)}
 .stamp.wait{color:#C2780E}
 
 /* ---------- people ---------- */
@@ -378,7 +382,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-개인띠';
+const APP_VERSION='11.16-공금';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -395,7 +399,7 @@ const wxInline=v=>{const w=wxFind(v);return w?`<span class="wxi">${wxSvg(w,18)}$
 const wxPicker=(sel,attr='')=>`<div class="wx" role="group" aria-label="날씨" ${attr}>${WX.map(w=>`<button type="button" data-w="${w.k}" class="${wxFind(sel)?.k===w.k?'on':''}" aria-pressed="${wxFind(sel)?.k===w.k}">${wxSvg(w)}<span>${w.n}</span></button>`).join('')}</div>`;
 const PREP={stay:'숙박',flight:'항공',car:'렌트카',etc:'기타'};
 /* 누구 몫인가: all 모두 나눔, some 일부만, me 결제한 사람 혼자 (예전 카드: expense:false → me) */
-function prepShare(p){const all=members().map(m=>m.id);const mode=p.share||(p.expense===false?'me':'all');
+function prepShare(p){const all=members().map(m=>m.id);const mode=p.payer===POOL?'all':p.share||(p.expense===false?'me':'all');
   if(mode==='me')return{mode,ids:p.payer?[p.payer]:[]};
   if(mode==='some'){const ids=(p.split||[]).filter(x=>all.includes(x));return ids.length?{mode,ids}:{mode:'all',ids:all}}
   return{mode:'all',ids:all}}
@@ -649,7 +653,11 @@ function face(m,s=40){
   if(!m)return `<span class="face" style="--s:${s}px;--c:#B8C0D2">?</span>`;
   return `<span class="face" style="--s:${s}px;--c:${mcol(m)}" title="${esc(m.name)}">${m.avatar?`<img src="${esc(mediaUrl(m.avatar))}" alt="">`:esc((m.name||'?').slice(0,1))}</span>`;
 }
-const nameOf=id=>member(id)?.name||'누군가';
+const POOL='__pool';
+const nameOf=id=>id===POOL?'공금':member(id)?.name||'누군가';
+/* 공동구좌: meta.fund={on,amount}. 공금으로 낸 돈은 항상 모두가 똑같이 나누고, 남은 돈도 똑같이 돌려받음 */
+function fundInfo(){const f=meta().fund||{};const n=members().length;const spent=expenseRows().filter(e=>e.payer===POOL).reduce((s,e)=>s+e.amount,0);
+  const amount=Number(f.amount)||0;const left=amount-spent;return{on:!!f.on,amount,spent,left,each:n?left/n:0,n,used:spent>0}}
 /* 지우기 권한: 적은 사람 또는 관리자 */
 const canDel=by=>isOwner||(!!by&&by===myId);
 function chapHead(k,desc){
@@ -1181,7 +1189,7 @@ function editPrep(id,type){
     <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qD">${(PREPD[p.type]||PREPD.etc)[0]}</label><input class="in" type="date" id="qD" value="${esc(p.date||'')}"></div><div class="grow"><label class="lab" for="qD2">${(PREPD[p.type]||PREPD.etc)[1]}</label><input class="in" type="date" id="qD2" value="${esc(p.date2||'')}" min="${esc(p.date||'')}"></div></div>
     <p class="small muted" id="qDn" style="margin:4px 0 0"></p>
     <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qC">금액</label><input class="in" type="number" id="qC" value="${esc(p.cost||'')}" step="${curDigits()?'0.01':'1'}" inputmode="${curDigits()?'decimal':'numeric'}" placeholder="${esc(curSymbol())}"></div></div>
-    <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qP">결제한 사람</label><select class="sel" id="qP"><option value="">-</option>${members().map(m=>`<option value="${m.id}" ${p.payer===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
+    <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="qP">결제한 사람</label><select class="sel" id="qP"><option value="">-</option>${fundInfo().on||p.payer===POOL?`<option value="${POOL}" ${p.payer===POOL?'selected':''}>공금 (공동구좌)</option>`:''}${members().map(m=>`<option value="${m.id}" ${p.payer===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div class="grow"><label class="lab">상태</label><div class="seg" id="qS">${[['none','미정'],['wait','대기'],['done','확정']].map(([k,t])=>`<button data-s="${k}" class="${(p.status||'none')===k?'on':''}">${t}</button>`).join('')}</div></div></div>
     <label class="lab" for="qK">예약번호</label><input class="in" id="qK" value="${esc(p.code||'')}">
     <label class="lab" for="qM">메모</label><textarea class="ta" id="qM" style="min-height:64px" placeholder="체크인 시간, 주소, 주의할 점">${esc(p.memo||'')}</textarea>
@@ -1191,11 +1199,13 @@ function editPrep(id,type){
     <div class="sp"></div><div class="row"><button class="btn grow" id="qSave">저장</button><button class="btn quiet" id="qNo">닫기</button></div>
     ${id&&canDel(p.by)?'<div style="margin-top:18px"><button class="btn danger sm" id="qDel">이 카드 지우기</button></div>':''}`);
   let sh=p.share||prepShare(p).mode;
-  const shUi=()=>{$$('#qSh button').forEach(x=>x.classList.toggle('on',x.dataset.sh===sh));$('#qSp').style.display=sh==='some'?'':'none';
+  const shUi=()=>{const pool=$('#qP').value===POOL;if(pool)sh='all';$$('#qSh button').forEach(x=>{x.disabled=pool&&x.dataset.sh!=='all'});
+    $$('#qSh button').forEach(x=>x.classList.toggle('on',x.dataset.sh===sh));$('#qSp').style.display=sh==='some'?'':'none';
     const n=sh==='some'?$$('.qSx:checked').length:members().length,c=Number($('#qC').value)||0;
+    if(pool){$('#qShN').innerHTML=`공금으로 낸 돈은 모두가 똑같이 나눠요${c&&n?`, 1인당 <b>${esc(won(c/n))}</b>`:''}.`;return}
     $('#qShN').innerHTML=sh==='me'?'정산에 넣지 않아요. 결제한 사람 혼자 부담해요.':sh==='some'?(n?`고른 ${n}명이 똑같이 나눠요${c?`, 1인당 <b>${esc(won(c/n))}</b>`:''}.`:'나눌 사람을 골라 주세요.'):`${n}명이 똑같이 나눠요${c&&n?`, 1인당 <b>${esc(won(c/n))}</b>`:''}.`};
   $$('#qSh button').forEach(b=>b.onclick=()=>{sh=b.dataset.sh;if(sh==='some'&&!$$('.qSx:checked').length&&p.payer)$$('.qSx').forEach(x=>{if(x.value===($('#qP').value||p.payer))x.checked=true});shUi()});
-  $$('.qSx').forEach(x=>x.onchange=shUi);$('#qC').addEventListener('input',shUi);shUi();
+  $$('.qSx').forEach(x=>x.onchange=shUi);$('#qP').addEventListener('change',shUi);$('#qC').addEventListener('input',shUi);shUi();
   let s=p.status||'none';$$('#qS button').forEach(b=>b.onclick=()=>{s=b.dataset.s;$$('#qS button').forEach(x=>x.classList.toggle('on',x===b))});
   $('#qNo').onclick=closeSheet;
   const d=$('#qDel');if(d)d.onclick=()=>{closeSheet();remove('prep',nid)};
@@ -1509,7 +1519,7 @@ function rRefl(v){
 function expenseRows(){
   const ids=members().map(m=>m.id);
   const fromPrep=all('prep').filter(p=>prepShare(p).mode!=='me'&&p.cost&&p.payer).map(p=>({id:'p'+p.id,prep:true,day:null,payer:p.payer,amount:Number(p.cost),memo:p.title||PREP[p.type],split:prepShare(p).ids}));
-  const ex=all('expense').map(e=>({...e,amount:Number(e.amount)||0,split:(e.split||[]).filter(s=>ids.includes(s))})).map(e=>({...e,split:e.split.length?e.split:ids}));
+  const ex=all('expense').map(e=>({...e,amount:Number(e.amount)||0,split:(e.split||[]).filter(s=>ids.includes(s))})).map(e=>({...e,split:e.payer===POOL||!e.split.length?ids:e.split}));
   return [...fromPrep,...ex].sort((a,b)=>((a.day??-1)-(b.day??-1))||((a.created||0)-(b.created||0)));
 }
 function settle(){
@@ -1529,10 +1539,18 @@ function settle(){
 }
 function rMoney(v){
   const ms=members(),rows_=expenseRows(),{bal,tr}=settle(),total=rows_.reduce((s,e)=>s+e.amount,0),ti=todayIdx();
+  const fi=fundInfo();
+  const fundBlock=`<div class="block"><h3>공동구좌</h3>
+    <p class="small muted" style="margin:-4px 0 10px">여행 전에 모은 공동구좌가 있나요?</p>
+    <div class="seg" id="fOn"><button type="button" data-fo="1" class="${fi.on?'on':''}">있어요</button><button type="button" data-fo="0" class="${fi.on?'':'on'}">없어요</button></div>
+    ${fi.on?`<label class="lab" for="fAmt">모은 돈 전체</label><input class="in" type="number" id="fAmt" step="${curDigits()?'0.01':'1'}" inputmode="${curDigits()?'decimal':'numeric'}" value="${fi.amount||''}" placeholder="${esc(curSymbol())}" style="max-width:220px">
+      <div class="fund"><div><span>모은 돈</span><b>${won(fi.amount)}</b></div><div><span>쓴 돈</span><b>${won(fi.spent)}</b></div><div class="${fi.left<0?'neg':''}"><span>${fi.left<0?'모자란 돈':'남은 돈'}</span><b>${won(Math.abs(fi.left))}</b></div></div>
+      <p class="small" style="margin-top:10px">${!fi.n?'참가자를 먼저 등록해 주세요.':fi.left>=0?`남은 돈은 끝나고 ${fi.n}명이 똑같이 나눠요. 1인당 <b class="hl">${won(fi.each)}</b> 돌려받기`:`공금이 모자라요. ${fi.n}명이 1인당 <b class="hl">${won(-fi.each)}</b>씩 더 넣어야 해요`}</p>
+      <p class="small faint" style="margin-top:6px">지출을 적을 때 낸 사람을 「공금」으로 고르세요. 공금 지출은 모두가 똑같이 나누고, 아래 「보낼 돈」 계산에서는 빠져요.</p>`:fi.used?`<p class="small" style="margin-top:10px;color:var(--red)">공금으로 낸 지출이 ${won(fi.spent)} 있어요. 「있어요」를 골라야 정산에 맞게 들어가요.</p>`:''}</div>`;
   const curBlock=`<div class="row" style="margin:-6px 0 14px"><label class="small muted" for="mCur">정산 통화</label><div style="flex:0 0 auto">${curSelect('mCur')}</div></div>`;
-  v.innerHTML=chapHead('money','누가 얼마를 냈는지만 적으면, 누가 누구에게 얼마를 보내면 되는지 계산합니다. 준비 장의 예약 금액도 들어와요.')+curBlock+`
+  v.innerHTML=chapHead('money','누가 얼마를 냈는지만 적으면, 누가 누구에게 얼마를 보내면 되는지 계산합니다. 준비 장의 예약 금액도 들어와요.')+curBlock+fundBlock+`
     <div class="block"><h3>지출 적기</h3>
-      <div class="row"><select class="sel" id="xD" style="width:auto" aria-label="날짜"><option value="">여행 전</option>${days().map(d=>`<option value="${d.i}" ${d.i===ti?'selected':''}>${d.i+1}일째</option>`).join('')}</select><select class="sel grow" id="xP" aria-label="낸 사람"><option value="">낸 사람</option>${ms.map(m=>`<option value="${m.id}" ${m.id===myId?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
+      <div class="row"><select class="sel" id="xD" style="width:auto" aria-label="날짜"><option value="">여행 전</option>${days().map(d=>`<option value="${d.i}" ${d.i===ti?'selected':''}>${d.i+1}일째</option>`).join('')}</select><select class="sel grow" id="xP" aria-label="낸 사람"><option value="">낸 사람</option>${fi.on?`<option value="${POOL}">공금 (공동구좌)</option>`:''}${ms.map(m=>`<option value="${m.id}" ${m.id===myId?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
       <div class="row" style="margin-top:8px"><input class="in" type="number" inputmode="${curDigits()?'decimal':'numeric'}" step="${curDigits()?'0.01':'1'}" id="xA" placeholder="금액 (${esc(curSymbol())})" style="width:140px" aria-label="금액"><input class="in grow" id="xM" placeholder="무엇에 (예: 점심 In-N-Out)" aria-label="내용"></div>
       <p class="small muted" style="margin:12px 0 6px">함께 낼 사람</p>
       <div class="row">${ms.map(m=>`<label class="chk"><input type="checkbox" class="xS" value="${m.id}" checked>${face(m,22)}${esc(m.name)}</label>`).join('')}</div>
@@ -1544,8 +1562,11 @@ function rMoney(v){
       <h3 style="margin-top:22px">사람별</h3>
       <table><thead><tr><th>이름</th><th class="num">낸 돈</th><th class="num">내 몫</th><th class="num">차이</th></tr></thead><tbody>
       ${ms.map(m=>{const paid=rows_.filter(e=>e.payer===m.id).reduce((s,e)=>s+e.amount,0);const b=bal[m.id]||0;return `<tr><td>${esc(m.name)}</td><td class="num">${won(paid)}</td><td class="num">${won(paid-b)}</td><td class="num ${b>=0?'pos':'neg'}">${b>=0?'+':''}${won(b)}</td></tr>`}).join('')}</tbody></table></div>`;
+  const xpUi=()=>{const pool=$('#xP').value===POOL;$$('.xS',v).forEach(c=>{if(pool)c.checked=true;c.disabled=pool})};$('#xP').addEventListener('change',xpUi);
+  $$('[data-fo]',v).forEach(b=>b.onclick=()=>{const on=b.dataset.fo==='1';patch('trip','meta',{fund:{...(meta().fund||{}),on}})});
+  const fa=$('#fAmt',v);if(fa)fa.addEventListener('change',()=>patch('trip','meta',{fund:{...(meta().fund||{}),on:true,amount:Number(fa.value)||0}}));
   $('#xGo').onclick=()=>{const amount=Number($('#xA').value),payer=$('#xP').value;if(!amount||!payer){toast('낸 사람과 금액을 넣어 주세요');return}
-    const split=$$('.xS:checked',v).map(c=>c.value);if(!split.length){toast('함께 낼 사람을 한 명 이상 골라 주세요');return}
+    const split=payer===POOL?ms.map(m=>m.id):$$('.xS:checked',v).map(c=>c.value);if(!split.length){toast('함께 낼 사람을 한 명 이상 골라 주세요');return}
     const d=$('#xD').value;put('expense',uid(8),{day:d===''?null:Number(d),payer,amount,memo:$('#xM').value.trim(),split,created:Date.now(),by:myId||null})};
   $$('[data-xx]',v).forEach(b=>b.onclick=()=>{const e=one('expense',b.dataset.xx);ask(`「${e?.memo||'이 지출'}」 ${won(e?.amount)} 지출을 취소할까요?`,'지출 취소',()=>remove('expense',b.dataset.xx),true,'그대로 두기')});
   bindAuto(v);
@@ -1687,6 +1708,7 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   b+=`<section>${chap(6,'앨범')}${Object.keys(ab).sort((a,c)=>(a==='x')-(c==='x')||a-c).map(k=>(k==='x'?'<div class="dh"><b>그 밖의 순간들</b></div>':dh(Number(k)))+`<div class="grid album">${ab[k].map(fig).join('')}</div>`).join('')||'<p class="no">사진이 없어요</p>'}</section>`;
   b+=`<section>${chap(7,'뒤돌아보기')}${ms.map(x=>{const r=one('refl',x.id)||{};const qs=REFLQ.filter(([k])=>r[k]);return `<article class="rf"><div class="rh">${F(x,52)}<h3>${esc(x.name)}</h3></div>${qs.length?qs.map(([k,q])=>`<h4>${q}</h4><p>${esc(r[k])}</p>`).join(''):'<p class="no">쓰지 않았어요</p>'}</article>`}).join('')}</section>`;
   b+=`<section>${chap('','정산')}<p class="tot"><b>${won(total)}</b> ${ms.length?`<span>한 사람당 평균 ${won(total/ms.length)}</span>`:''}</p>
+    ${(()=>{const fi=fundInfo();return fi.on?`<h3 class="h3">공동구좌</h3><p>모은 돈 <b>${won(fi.amount)}</b>, 쓴 돈 <b>${won(fi.spent)}</b>, ${fi.left>=0?`남은 돈 <b>${won(fi.left)}</b> (1인당 ${won(fi.each)} 돌려받음)`:`모자란 돈 <b>${won(-fi.left)}</b> (1인당 ${won(-fi.each)} 더 냄)`}</p>`:''})()}
     ${tr.length?`<h3 class="h3">보낸 돈</h3><ul class="xf">${tr.map(t=>`<li>${nm(t.from)} → ${nm(t.to)} <b>${won(t.amt)}</b></li>`).join('')}</ul>`:''}
     <h3 class="h3">사람별</h3><table><tr><th>이름</th><th class="n">낸 돈</th><th class="n">내 몫</th><th class="n">차이</th></tr>${ms.map(x=>{const paid=ex.filter(e=>e.payer===x.id).reduce((s,e)=>s+e.amount,0),bb=bal[x.id]||0;return `<tr><td>${esc(x.name)}</td><td class="n">${won(paid)}</td><td class="n">${won(paid-bb)}</td><td class="n">${bb>=0?'+':''}${won(bb)}</td></tr>`}).join('')}</table>
     <h3 class="h3">지출 내역</h3><table>${ex.map(e=>`<tr><td>${e.day==null?'여행 전':e.day+1+'일째'}</td><td>${esc(e.memo||'')}</td><td>${nm(e.payer)}</td><td class="n">${won(e.amount)}</td></tr>`).join('')||'<tr><td class="no">없음</td></tr>'}</table>
