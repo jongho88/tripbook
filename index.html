@@ -373,7 +373,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.16-표지';
+const APP_VERSION='11.16-표지사진';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -615,7 +615,10 @@ async function shrink(file,max=1600,q=.82){
 }
 async function savePhoto(blob){
   const id=uid(12);const path=`${cfg.mode==='remote'?cfg.folder:'local'}/${id}.jpg`;
-  await BE.putBlob(path,blob);return{id,path};
+  await BE.putBlob(path,blob);
+  /* 올린 사진 목록: 바꾸거나 다시 자른 사진도 마지막 「온라인 기록 지우기」 때 빠짐없이 지우려고 */
+  try{await put('blob',id,{path},{silent:true})}catch(e){console.warn(e)}
+  return{id,path};
 }
 async function addPhotos(files,extra){
   const ids=[];let i=0;
@@ -831,7 +834,7 @@ function rSetup(){
     try{await be.ping()}catch(e){$('#sGo').disabled=false;msg.innerHTML=`연결하지 못했어요. ${/404|relation|tripbook_records|PGRST/.test(e.message)?'2단계 코드를 실행했는지 확인해 주세요.':'주소와 키를 다시 확인해 주세요.'}<br><span class="faint">${esc(e.message)}</span>`;return}
     try{
       const move=!!$('#sMove')?.checked;const pathMap={};
-      const fix=d=>{const o={...d};for(const k of ['path','avatar','cover'])if(o[k]&&pathMap[o[k]])o[k]=pathMap[o[k]];return o};
+      const fix=d=>{const o={...d};for(const k of ['path','avatar','cover','coverOrig'])if(o[k]&&pathMap[o[k]])o[k]=pathMap[o[k]];return o};
       if(move){
         const bar=$('#sBar');bar.style.display='';
         const keys=Object.keys(LocalBackend.blobUrls);const list=[...rows.values()].filter(r=>!r.del);
@@ -952,6 +955,41 @@ function activeToday(){const t=new Date();const same=ms=>{if(!ms)return false;co
   [['log','author','created'],['loc','author','at'],['media','author','created'],['prep','by'],['plan','author','created'],['check','by','created'],['expense','by','created'],['vote','member'],['react','member'],['refl',null,'saved']].forEach(([c,f,tf])=>
     all(c).forEach(r=>{const who=f?r[f]:r.id;if(same((tf&&r[tf])||r._t))set.add(who)}));
   set.delete(null);set.delete(undefined);set.delete('');const ids=new Set(members().map(m=>m.id));return new Set([...set].filter(x=>ids.has(x)))}
+/* 표지 사진: 16:10 틀에 맞춰 끌어서 위치, 슬라이더나 두 손가락으로 크기 */
+async function coverCrop(blob,prev,isNew){
+  const url=URL.createObjectURL(blob);let img;try{img=await loadImg(url)}catch(e){toast(e.message);return}
+  const W=img.naturalWidth,H=img.naturalHeight,R=16/10;
+  const maxW=Math.min(W,H*R);              /* 틀에 꽉 차는 가장 큰 잘라내기 폭 */
+  let c=prev&&prev.w?{...prev}:{w:maxW,x:W/2,y:H/2};
+  const clamp=()=>{c.w=Math.max(maxW*.25,Math.min(maxW,c.w));const h=c.w/R;c.x=Math.min(W-c.w/2,Math.max(c.w/2,c.x));c.y=Math.min(H-h/2,Math.max(h/2,c.y))};clamp();
+  const zv=()=>Math.round((1-c.w/maxW)/.75*100);
+  openSheet(`<h2>표지 사진 맞추기</h2><p class="muted small" style="margin:6px 0 12px">사진을 끌어서 위치를 잡고, 아래 막대나 두 손가락으로 크기를 바꿔 주세요.</p>
+    <canvas id="ccv" width="800" height="500" style="width:100%;aspect-ratio:16/10;border-radius:16px;touch-action:none;cursor:grab;background:var(--line2);display:block" aria-label="표지 사진 맞추기"></canvas>
+    <div class="row" style="margin-top:14px;gap:10px"><span class="small muted">작게</span><input type="range" id="ccz" min="0" max="100" value="${zv()}" class="grow" style="accent-color:var(--cobalt)" aria-label="사진 크기"><span class="small muted">크게</span></div>
+    <div class="sp"></div><div class="row"><button class="btn grow" id="ccOk">이대로 저장</button><button class="btn quiet" id="ccNo">취소</button></div>`);
+  const cv=$('#ccv'),cx=cv.getContext('2d');
+  const draw=()=>{const h=c.w/R;cx.clearRect(0,0,800,500);cx.drawImage(img,c.x-c.w/2,c.y-h/2,c.w,h,0,0,800,500);
+    cx.strokeStyle='rgba(255,255,255,.55)';cx.lineWidth=1.5;cx.beginPath();for(const t of [1/3,2/3]){cx.moveTo(800*t,0);cx.lineTo(800*t,500);cx.moveTo(0,500*t);cx.lineTo(800,500*t)}cx.stroke()};
+  draw();
+  $('#ccz').oninput=e=>{c.w=maxW*(1-Number(e.target.value)/100*.75);clamp();draw()};
+  const pts=new Map();let start=null;
+  const k=()=>c.w/cv.getBoundingClientRect().width;
+  cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});cv.style.cursor='grabbing';
+    const a=[...pts.values()];start={c:{...c},a:a.map(p=>({...p})),d:a.length>1?Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y):0}};
+  cv.onpointermove=e=>{if(!pts.has(e.pointerId)||!start)return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});const a=[...pts.values()];
+    if(a.length>1&&start.d){const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);c.w=start.c.w*start.d/d}
+    else{const s=start.c.w/cv.getBoundingClientRect().width;c.x=start.c.x-(a[0].x-start.a[0].x)*s;c.y=start.c.y-(a[0].y-start.a[0].y)*s}
+    clamp();$('#ccz').value=zv();draw()};
+  cv.onpointerup=cv.onpointercancel=e=>{pts.delete(e.pointerId);cv.style.cursor='grab';const a=[...pts.values()];start=a.length?{c:{...c},a:a.map(p=>({...p})),d:0}:null};
+  cv.onwheel=e=>{e.preventDefault();c.w*=e.deltaY>0?1.06:1/1.06;clamp();$('#ccz').value=zv();draw()};
+  $('#ccNo').onclick=()=>{closeSheet();URL.revokeObjectURL(url)};
+  $('#ccOk').onclick=async()=>{$('#ccOk').disabled=true;toast('표지 사진 저장 중…',8000);
+    try{const out=document.createElement('canvas');out.width=1600;out.height=1000;const h=c.w/R;out.getContext('2d').drawImage(img,c.x-c.w/2,c.y-h/2,c.w,h,0,0,1600,1000);
+      const cut=await new Promise(r=>out.toBlob(r,'image/jpeg',.86));const d={cover:(await savePhoto(cut)).path,coverCrop:{x:Math.round(c.x),y:Math.round(c.y),w:Math.round(c.w)}};
+      if(isNew){d.coverOrig=(await savePhoto(blob)).path;d.coverBy=myId||null}
+      closeSheet();URL.revokeObjectURL(url);await patch('trip','meta',d);toast('표지 사진을 맞췄어요')}
+    catch(err){$('#ccOk').disabled=false;toast('저장하지 못했어요: '+err.message)}};
+}
 let infoOpen=false;
 function rCover(v){
   const todayActive=activeToday();
@@ -973,7 +1011,7 @@ function rCover(v){
     <h1 class="cover-title">${esc(m.title||'여행 제목을 정해 주세요')}</h1>
     ${m.sub?`<p class="cover-sub">${esc(m.sub)}</p>`:'<div style="height:14px"></div>'}
     ${ms.length?`<div class="faces cover-faces ${coverDropped?'':'drop'}" aria-label="함께 가는 사람들">${ms.map((x,i)=>`<button class="cf ${todayActive.has(x.id)?'today':''}" data-cf="${x.id}" style="animation-delay:${coverDropped?0:(i*0.4).toFixed(1)}s" aria-label="${esc(x.name)}${x.role?', '+esc(x.role):''}${todayActive.has(x.id)?', 오늘 기록함':''}">${face(x,66)}</button>`).join('')}</div>${todayActive.size?'<div class="cf-legend"><i></i>오늘 기록을 남긴 사람</div>':''}`:''}
-    ${m.cover?`<div class="cover-photo"><img src="${esc(mediaUrl(m.cover))}" alt=""></div>`:''}
+    ${m.cover?`<div class="cover-photo"${canDel(m.coverBy)?' data-adj="1" title="눌러서 위치·크기 조정" style="cursor:pointer"':''}><img src="${esc(mediaUrl(m.cover))}" alt=""></div>`:''}
     <div class="ticket">
       <div class="main"><div class="tk-grid">
         <div><div class="tk-k">여행지</div><div class="tk-v">${esc(m.place||'미정')}</div></div>
@@ -995,7 +1033,7 @@ function rCover(v){
       <div class="row" style="align-items:flex-start"><div class="grow"><label class="lab" for="fA">출발일</label><input class="in" type="date" id="fA" data-f="trip/meta/start" data-rerender="1" value="${esc(m.start||'')}"></div>
       <div class="grow"><label class="lab" for="fB">돌아오는 날</label><input class="in" type="date" id="fB" data-f="trip/meta/end" data-rerender="1" value="${esc(m.end||'')}"></div></div>
       <label class="lab">표지 사진</label>
-      <div class="row"><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="fC"></label>${m.cover&&canDel(m.coverBy)?`<button class="btn quiet sm" id="fCx">표지 사진 빼기</button>`:''}</div>`:''}
+      <div class="row"><label class="btn line sm">사진 고르기<input type="file" class="file" accept="image/*" id="fC"></label>${m.cover&&canDel(m.coverBy)?`<button class="btn line sm" id="fCadj">위치·크기 조정</button><button class="btn quiet sm" id="fCx">표지 사진 빼기</button>`:''}</div>`:''}
     </div>
     <p class="small faint" style="margin-top:22px;text-align:center">여행모아 버전 ${APP_VERSION}</p>`;
   $$('[data-go]',v).forEach(b=>b.onclick=()=>go(b.dataset.go));
@@ -1010,8 +1048,11 @@ function rCover(v){
   });
   bindA2hs();
   bindAuto(v);
-  if($('#fC'))$('#fC').onchange=async e=>{const f=e.target.files[0];if(!f)return;toast('표지 사진 올리는 중…',8000);try{const {path}=await savePhoto(await shrink(f,2000,.85));await patch('trip','meta',{cover:path,coverBy:myId||null});toast('표지 사진을 바꿨어요')}catch(err){toast('올리지 못했어요: '+err.message)}};
-  const cx=$('#fCx');if(cx)cx.onclick=()=>patch('trip','meta',{cover:null});
+  if($('#fC'))$('#fC').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const b=await shrink(f,2400,.88);coverCrop(b,null,true)}catch(err){toast('사진을 열지 못했어요: '+err.message)}};
+  const adjustCover=async()=>{const mm=meta();try{toast('사진 여는 중…',4000);const b=await BE.getBlob(mm.coverOrig||mm.cover);coverCrop(b,mm.coverOrig?mm.coverCrop:null,false)}catch(err){toast('사진을 열지 못했어요: '+err.message)}};
+  const cadj=$('#fCadj');if(cadj)cadj.onclick=adjustCover;
+  const cph=$('.cover-photo[data-adj]',v);if(cph)cph.onclick=adjustCover;
+  const cx=$('#fCx');if(cx)cx.onclick=()=>patch('trip','meta',{cover:null,coverOrig:null,coverCrop:null});
 }
 
 /* ---- 1 사람들 ---- */
@@ -1570,7 +1611,7 @@ function wipeRemote(){
     const on=(p,m)=>{bar.firstChild.style.width=p*100+'%';$('#wMsg').textContent=m};
     try{clearInterval(syncTimer);on(.05,'사진 목록 확인 중');
       try{applyRemote(await BE.load())}catch(e){console.warn(e)}
-      const paths=new Set();rows.forEach(r=>{const d=r.data||{};['path','avatar','cover'].forEach(k=>{if(d[k]&&String(d[k]).startsWith(cfg.folder+'/'))paths.add(d[k])})});
+      const paths=new Set();rows.forEach(r=>{const d=r.data||{};['path','avatar','cover','coverOrig'].forEach(k=>{if(d[k]&&String(d[k]).startsWith(cfg.folder+'/'))paths.add(d[k])})});
       const res=await BE.wipe([...paths],on);
       LS.del(outboxKey());LS.del('tb.cache.'+cfg.trip);
       $('#modal .sheet').innerHTML=`<h2>모두 지웠어요</h2><p class="muted" style="margin:10px 0 16px">이 여행의 글${res.removed>=res.photos?'과 사진':''}이 Supabase에서 지워졌습니다.${res.removed<res.photos?` 사진 ${res.photos-res.removed}장은 지우지 못했어요. 아래처럼 프로젝트를 지우면 함께 사라집니다.`:''} 남은 흔적까지 정리하려면 Supabase의 SQL Editor에서 아래 코드를 실행하고, Storage 메뉴에서 tripbook 보관함을 지워 주세요. 이 여행에만 쓴 프로젝트라면 Project Settings › General 맨 아래 Delete project로 프로젝트를 통째로 지워도 됩니다.</p><pre class="code">${esc(CLEAN_SQL)}</pre><div class="sp"></div><div class="row"><button class="btn line" id="wCp">코드 복사</button><button class="btn grow" id="wDone">처음 화면으로</button></div>`;
@@ -1631,7 +1672,7 @@ section{max-width:760px;margin:0 auto 18px;background:#fff;padding:48px 28px;bor
 .cover .place{color:#2340E0;font-weight:700}.cover h1{font-size:clamp(46px,11vw,88px);font-weight:800;letter-spacing:-.05em;line-height:1.02;margin:6px 0}.cover .sub{color:#4E5A75;font-size:19px}
 .faces{display:flex;flex-wrap:wrap;padding-left:12px;margin:28px 0}.faces .f{margin-left:-12px}.faces .f:nth-child(odd){transform:rotate(-5deg)}.faces .f:nth-child(even){transform:rotate(4deg) translateY(4px)}
 .f{width:var(--s);height:var(--s);border-radius:50%;display:inline-grid;place-items:center;background:var(--c);color:#fff;font-weight:800;font-size:calc(var(--s)*.42);border:calc(var(--s)*.06) solid #fff;box-shadow:0 0 0 1.5px var(--c),0 3px 0 rgba(20,33,61,.14);overflow:hidden;flex:none}.f img{width:100%;height:100%;object-fit:cover}
-.cph{border-radius:18px;overflow:hidden;margin-bottom:24px}.cph img{width:100%;display:block}
+.cph{border-radius:18px;overflow:hidden;margin-bottom:24px;aspect-ratio:16/10;background:#E9EDF4}.cph img{width:100%;height:100%;object-fit:cover;display:block}
 .tk{display:grid;grid-template-columns:1fr auto;border:1.5px solid #14213D;border-radius:18px;overflow:hidden;break-inside:avoid;margin-bottom:12px}
 .tm{display:flex;flex-wrap:wrap;gap:6px 26px;padding:18px 20px}.tm small,.tm1 small{display:block;font-size:12px;color:#8A93A8;font-weight:600}.tm b{font-size:18px}
 .tm1{padding:16px 20px}.tm1 b{font-size:18px;display:block}.tm1 p{font-size:14px;color:#4E5A75}
@@ -1652,7 +1693,7 @@ table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:8px 4px;b
 .wxi{display:inline-flex;align-items:center;gap:3px;color:#4E5A75;font-weight:500;font-size:13px;margin-left:6px;vertical-align:-3px}
 .no{color:#8A93A8}.colo{margin-top:48px;text-align:center;color:#8A93A8;font-size:14px}
 .pbtn{position:fixed;right:16px;bottom:16px;background:#2340E0;color:#fff;border:0;border-radius:12px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}
-@media print{body{background:#fff;padding:0}section{max-width:none;margin:0;border-radius:0;padding:24px 8px;break-before:page}section.cover{break-before:auto}.pbtn{display:none}}
+@media print{body{background:#fff;padding:0}section{max-width:none;margin:0;border-radius:0;padding:24px 8px;break-before:page}section.cover{break-before:auto;break-inside:avoid}.cph{margin-bottom:16px}img{max-width:100%}.route img{max-height:60vh;object-fit:contain}.pbtn{display:none}}
 </style></head><body>${b}<button class="pbtn" onclick="window.print()">인쇄 / PDF로 저장</button></body></html>`;
 }
 
