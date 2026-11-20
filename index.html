@@ -400,7 +400,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-영상2';
+const APP_VERSION='11.20-앨범설명';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1500,7 +1500,7 @@ async function videoThumb(file){
 function wantsFor(pid){return all('want').filter(w=>w.item===pid&&w.on&&w.member)}
 function videoBar(p){const ws=wantsFor(p.id);const mine=p.author===myId;
   if(mine){const wait=ws.filter(w=>!w.sent);return `<div class="vbar">${ws.length?`<p class="small">${ws.map(w=>`<span class="vw ${w.sent?'done':''}">${esc(nameOf(w.member))} ${w.sent?'보냄':'원해요'}</span>`).join('')}</p>`:'<p class="small faint">아직 받고 싶다는 사람이 없어요</p>'}
-    <div class="row" style="gap:6px"><button class="btn ${wait.length?'':'line'} sm" data-vsend="${p.id}">영상 보내기${wait.length?` (${wait.length}명)`:''}</button><button class="btn quiet sm" data-vre="${p.id}">첫 장면 다시 만들기</button></div></div>`}
+    <button class="btn ${wait.length?'':'line'} sm" data-vsend="${p.id}">영상 보내기${wait.length?` (${wait.length}명)`:''}</button></div>`}
   const me=ws.find(w=>w.member===myId);return `<div class="vbar"><p class="small faint">원본은 ${esc(nameOf(p.author))}의 휴대폰에 있어요${ws.length?` · ${ws.length}명 원해요`:''}</p>
     ${me&&me.sent?`<span class="vw done">${esc(nameOf(p.author))} 님이 보냈어요</span>`:myId?`<button class="btn ${me?'quiet':'line'} sm" data-want="${p.id}" aria-pressed="${!!me}">${me?'받고 싶어요 취소':'나도 받고 싶어요'}</button>`:''}</div>`}
 function sendVideo(pid){
@@ -1530,20 +1530,18 @@ function rAlbum(v){
   const keys=Object.keys(by).sort((a,b)=>(a==='x')-(b==='x')||a-b);
   const order=keys.flatMap(k=>by[k]);
   const who=members().filter(m=>counts[m.id]);
-  v.innerHTML=chapHead('album','날짜별로 모인 사진입니다.<br>사진 아래에 한 줄을 적으면 책의 사진 설명이 돼요.')+`
+  v.innerHTML=chapHead('album','날짜별로 모인 사진과 영상입니다. 아래에 한 줄을 적으면 책의 설명이 돼요.<br>영상은 첫 장면만 올라가고, 원본은 올린 사람의 휴대폰에 있어요. 받고 싶은 영상은 「나도 받고 싶어요」를 눌러 주세요.')+`
     <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진·영상 추가<input type="file" class="file" id="aF" accept="image/*,video/*" multiple></label></div>
     ${who.length>1||albumWho!=='all'?`<div class="whochips" role="group" aria-label="사람별 보기"><button data-aw="all" class="${albumWho==='all'?'on':''}">전체 ${all_.length}</button>${who.map(m=>`<button data-aw="${m.id}" class="${albumWho===m.id?'on':''}">${face(m,22)}${esc(m.name)} ${counts[m.id]}</button>`).join('')}</div>`:''}
     ${keys.map(k=>`<div class="day-h"><b>${k==='x'?'날짜 없음':Number(k)+1+'일째'}</b><span>${ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${by[k].length}장</span></div>
       <div class="album">${by[k].map(p=>`<figure><button class="ph-open" data-open="${order.indexOf(p)}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy">${p.kind==='video'?`<span class="vbadge" aria-label="영상 ${durTxt(p.dur)}"><i>▶</i>${durTxt(p.dur)}</span>`:''}</button>${canDel(p.author)?`<input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="${p.kind==='video'?'영상 설명':'사진 설명'}" aria-label="사진 설명">`:p.caption?`<p class="small" style="padding:6px 0;border-bottom:1.5px solid transparent">${esc(p.caption)}</p>`:''}${reactBar(p.id)}${p.kind==='video'?videoBar(p):''}<div class="meta"><span>${esc(nameOf(p.author))}</span>${canDel(p.author)?`<button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button>`:''}</div></figure>`).join('')}</div>`).join('')}
-    ${all_.length?'':'<div class="empty"><b>아직 사진이 없어요</b>여행일기에 올린 사진도 여기에 모입니다.</div>'}`;
+    ${all_.length?'':'<div class="empty"><b>아직 사진이나 영상이 없어요</b>「사진·영상 추가」로 올려 주세요. 여행일기에 올린 사진도 여기에 모여요.</div>'}`;
   bindAuto(v);
   $$('[data-aw]',v).forEach(b=>b.onclick=()=>{albumWho=b.dataset.aw;render()});
   $$('[data-open]',v).forEach(b=>b.onclick=()=>openViewer(order,Number(b.dataset.open)));
   const rebar=pid=>{const o=$(`[data-rx="${pid}"]`,v);if(o){o.outerHTML=reactBar(pid);bindReacts(v,rebar)}};bindReacts(v,rebar);
   const addVideos=async(vs,day)=>{let n=0;for(const f of vs){toast(`영상 첫 장면을 만드는 중… ${n+1}/${vs.length}`,8000);try{const t=await videoThumb(f);const {id,path}=await savePhoto(t.blob);
       await put('media',id,{kind:'video',path,dur:t.dur,vname:f.name||'',vsize:f.size||0,vdate:f.lastModified||null,author:myId,day,created:Date.now()});n++}catch(err){toast('영상을 읽지 못했어요: '+err.message,4000)}}return n};
-  $$('[data-vre]',v).forEach(b=>b.onclick=()=>{const inp=document.createElement('input');inp.type='file';inp.accept='video/*';inp.onchange=async()=>{const f=inp.files[0];if(!f)return;toast('첫 장면을 다시 만드는 중…',8000);
-    try{const t=await videoThumb(f);const {path}=await savePhoto(t.blob);await patch('media',b.dataset.vre,{path,dur:t.dur||one('media',b.dataset.vre)?.dur});toast('첫 장면을 바꿨어요');render()}catch(err){toast('영상을 읽지 못했어요: '+err.message)}};inp.click()});
   $$('[data-want]',v).forEach(b=>b.onclick=()=>{const id=b.dataset.want+'__'+myId;const cur=one('want',id);put('want',id,{item:b.dataset.want,member:myId,on:!(cur&&cur.on),sent:false},{silent:true});render()});
   $$('[data-vsend]',v).forEach(b=>b.onclick=()=>sendVideo(b.dataset.vsend));
   $('#aF').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;const day=Number($('#aD').value)||0;
