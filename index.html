@@ -153,6 +153,11 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .ticket.per{border-color:var(--line);box-shadow:inset 6px 0 0 var(--red)}.ticket.per .main{padding-left:24px}.ticket.per .stub::before,.ticket.per .stub::after{border-color:var(--line)}
 .tk-sub{font-size:11.5px;color:var(--ink2);margin-top:9px;line-height:1.35;text-align:center}.tk-sub b{color:var(--ink)}
 .tk-meta b{color:var(--ink);font-weight:800}
+.pb-t{margin:10px 0 0 40px;background:var(--bg);border-radius:12px;padding:0 12px}
+.pb-t summary{list-style:none;display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font-size:14px;font-weight:700}
+.pb-t summary::-webkit-details-marker{display:none}.pb-t summary::after{content:'›';margin-left:6px;color:var(--ink3);font-size:20px;line-height:1;transition:transform .15s}.pb-t[open] summary::after{transform:rotate(90deg)}
+.pb-t summary b{margin-left:auto;font-size:16px;font-weight:800;white-space:nowrap}
+.pb-r{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line2);font-size:13px;color:var(--ink2)}.pb-r b{color:var(--ink);white-space:nowrap}.pb-r small{color:var(--ink3)}
 .gotl{background:var(--bg);border-radius:12px;padding:10px 12px;margin-top:10px}
 .gotc{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 9px 3px 3px;border-radius:999px;background:#fff;color:var(--ink3);border:1px solid var(--line)}.gotc.on{color:var(--ink);border-color:var(--cobalt)}
 .pbal{list-style:none;margin:6px 0 0;padding:0}
@@ -391,7 +396,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-점검';
+const APP_VERSION='11.20-쓴돈';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -665,6 +670,10 @@ function face(m,s=40){
 const POOL='__pool';
 const nameOf=id=>id===POOL?'공금':member(id)?.name||'누군가';
 /* 공동구좌: meta.fund={on,amount}. 공금으로 낸 돈은 항상 모두가 똑같이 나누고, 남은 돈도 똑같이 돌려받음 */
+/* 한 사람의 여행 경비 = 함께 나눈 지출 중 내 몫 + 공금 지출 중 내 몫 + 나 혼자 쓴 확정 예약 */
+function tripCost(mid,share){const fi=fundInfo();const pool=fi.on&&fi.n?fi.spent/fi.n:0;
+  const mine=all('prep').filter(p=>p.status==='done'&&prepShare(p).mode==='me'&&p.payer===mid&&p.cost);const solo=mine.reduce((t,p)=>t+Number(p.cost),0);
+  return{share,pool,solo,mine,fi,tot:share+pool+solo}}
 function fundInfo(){const f=meta().fund||{};const n=members().length;const spent=expenseRows().filter(e=>e.payer===POOL).reduce((s,e)=>s+e.amount,0);
   const amount=Number(f.amount)||0;const left=amount-spent;return{on:!!f.on,amount,spent,left,each:n?left/n:0,n,used:spent>0}}
 /* 지우기 권한: 적은 사람 또는 관리자 */
@@ -1593,7 +1602,12 @@ function rMoney(v){
       <h3 style="margin-top:22px">사람별</h3>
       <ul class="pbal">${ms.map(m=>{const paid=rows_.filter(e=>e.payer===m.id).reduce((s,e)=>s+e.amount,0);const b=bal[m.id]||0;const z=Math.abs(b)<.005;
         return `<li><div class="pb-h">${face(m,30)}<b>${esc(m.name)}</b><span class="num ${z?'':b>0?'pos':'neg'}">${z?'정산 끝':b>0?'받을 돈 '+won(b):'보낼 돈 '+won(-b)}</span></div>
-        <div class="pb-d"><span>낸 돈 <b class="num">${won(paid)}</b></span><span>내 몫 <b class="num">${won(paid-b)}</b></span></div></li>`}).join('')}</ul>
+        <div class="pb-d"><span>쓴 돈 <b class="num">${won(paid)}</b></span><span>내 몫 <b class="num">${won(paid-b)}</b></span></div>
+        ${(()=>{const {share,pool,solo,mine,fi,tot}=tripCost(m.id,paid-b);
+          return `<details class="pb-t"><summary><span>여행 경비 합계</span><b class="num">${won(tot)}</b></summary>
+            <div class="pb-r"><span>함께 나눈 지출 중 내 몫</span><b class="num">${won(share)}</b></div>
+            ${fi.on?`<div class="pb-r"><span>공금 지출 중 내 몫 <small>(${won(fi.spent)} ÷ ${fi.n}명)</small></span><b class="num">${won(pool)}</b></div>`:''}
+            <div class="pb-r"><span>나 혼자 쓴 예약${mine.length?` <small>(${mine.map(p=>esc(p.title||PREP[p.type])).join(', ')})</small>`:''}</span><b class="num">${won(solo)}</b></div></details>`})()}</li>`}).join('')}</ul>
       ${fundInfo().on?'<p class="small faint" style="margin-top:8px">공금으로 낸 돈은 위 공동구좌에서 따로 계산해서 여기에는 들어가지 않아요.</p>':''}</div>`;
   const xpUi=()=>{const pool=$('#xP').value===POOL;$$('.xS',v).forEach(c=>{if(pool)c.checked=true;c.disabled=pool})};$('#xP').addEventListener('change',xpUi);
   $$('[data-fo]',v).forEach(b=>b.onclick=()=>{const on=b.dataset.fo==='1';patch('trip','meta',{fund:{...(meta().fund||{}),on}})});
@@ -1755,7 +1769,9 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   b+=`<section>${chap('','정산')}<p class="tot"><b>${won(total)}</b> ${ms.length?`<span>한 사람당 평균 ${won(total/ms.length)}</span>`:''}</p>
     ${(()=>{const fi=fundInfo();return fi.on?`<h3 class="h3">공동구좌</h3><p>모은 돈 <b>${won(fi.amount)}</b>, 쓴 돈 <b>${won(fi.spent)}</b>, ${fi.left>=0?`남은 돈 <b>${won(fi.left)}</b> (1인당 ${won(fi.each)} 돌려받음)`:`모자란 돈 <b>${won(-fi.left)}</b> (1인당 ${won(-fi.each)} 더 냄)`}</p>`:''})()}
     ${tr.length?`<h3 class="h3">보낸 돈</h3><ul class="xf">${tr.map(t=>`<li>${nm(t.from)} → ${nm(t.to)} <b>${won(t.amt)}</b></li>`).join('')}</ul>`:''}
-    <h3 class="h3">사람별</h3><table><tr><th>이름</th><th class="n">낸 돈</th><th class="n">내 몫</th><th class="n">차이</th></tr>${ms.map(x=>{const paid=ex.filter(e=>e.payer===x.id).reduce((s,e)=>s+e.amount,0),bb=bal[x.id]||0;return `<tr><td>${esc(x.name)}</td><td class="n">${won(paid)}</td><td class="n">${won(paid-bb)}</td><td class="n">${bb>=0?'+':''}${won(bb)}</td></tr>`}).join('')}</table>
+    <h3 class="h3">사람별</h3><table><tr><th>이름</th><th class="n">쓴 돈</th><th class="n">내 몫</th><th class="n">차이</th></tr>${ms.map(x=>{const paid=ex.filter(e=>e.payer===x.id&&e.payer!==POOL).reduce((s,e)=>s+e.amount,0),bb=bal[x.id]||0;return `<tr><td>${esc(x.name)}</td><td class="n">${won(paid)}</td><td class="n">${won(paid-bb)}</td><td class="n">${bb>=0?'+':''}${won(bb)}</td></tr>`}).join('')}</table>
+    <h3 class="h3">사람별 여행 경비</h3><table><tr><th>이름</th><th class="n">함께 나눈 몫</th>${fundInfo().on?'<th class="n">공금 몫</th>':''}<th class="n">혼자 쓴 예약</th><th class="n">합계</th></tr>${ms.map(x=>{const paid=ex.filter(e=>e.payer===x.id&&e.payer!==POOL).reduce((s,e)=>s+e.amount,0),bb=bal[x.id]||0;const c=tripCost(x.id,paid-bb);
+      return `<tr><td>${esc(x.name)}</td><td class="n">${won(c.share)}</td>${c.fi.on?`<td class="n">${won(c.pool)}</td>`:''}<td class="n">${won(c.solo)}</td><td class="n"><b>${won(c.tot)}</b></td></tr>`}).join('')}</table>
     <h3 class="h3">지출 내역</h3><table>${ex.map(e=>`<tr><td>${e.day==null?'여행 전':e.day+1+'일째'}</td><td>${esc(e.memo||'')}</td><td>${nm(e.payer)}</td><td class="n">${won(e.amount)}</td></tr>`).join('')||'<tr><td class="no">없음</td></tr>'}</table>
     <p class="colo">${new Date().getFullYear()}년 ${new Date().getMonth()+1}월 ${new Date().getDate()}일, ${ms.map(x=>esc(x.name)).join(', ')}이 함께 만든 책<br>여행모아</p></section>`;
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(m.title||'여행모아')}</title><style>
