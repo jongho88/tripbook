@@ -400,7 +400,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-영상';
+const APP_VERSION='11.20-영상2';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1481,17 +1481,26 @@ let albumWho='all';
 /* ---- 영상: 서버에는 첫 장면 사진만. 원본은 올린 사람 휴대폰에만 있고, 원하는 사람에게 공유 창으로 보냄 ---- */
 const durTxt=d=>{d=Math.round(d||0);return Math.floor(d/60)+':'+String(d%60).padStart(2,'0')};
 async function videoThumb(file){
-  const url=URL.createObjectURL(file);const vd=document.createElement('video');vd.muted=true;vd.playsInline=true;vd.preload='auto';vd.src=url;
-  try{await new Promise((ok,no)=>{vd.onloadedmetadata=ok;vd.onerror=()=>no(new Error('이 영상 형식은 열 수 없어요'));setTimeout(()=>no(new Error('시간이 너무 걸려요')),15000)});
-    const dur=isFinite(vd.duration)?vd.duration:0;vd.currentTime=Math.min(.5,dur/2||0);
-    await new Promise(ok=>{vd.onseeked=ok;setTimeout(ok,4000)});
-    const w=vd.videoWidth||1280,h=vd.videoHeight||720,k=Math.min(1,1600/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);
-    c.getContext('2d').drawImage(vd,0,0,c.width,c.height);const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));if(!blob)throw new Error('첫 장면을 만들지 못했어요');
-    return{blob,dur}}finally{URL.revokeObjectURL(url)}}
+  /* 아이폰 사파리는 영상을 화면에 붙이고 한 번 재생해야 장면을 그려 줌. 까만 장면이면 조금 뒤 장면으로 다시 */
+  const url=URL.createObjectURL(file);const vd=document.createElement('video');vd.muted=true;vd.playsInline=true;vd.setAttribute('playsinline','');vd.setAttribute('muted','');vd.preload='auto';
+  vd.style.cssText='position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none';document.body.appendChild(vd);vd.src=url;
+  const wait=(ev,ms)=>new Promise(ok=>{let t;const f=()=>{clearTimeout(t);vd.removeEventListener(ev,f);ok(true)};vd.addEventListener(ev,f);t=setTimeout(()=>{vd.removeEventListener(ev,f);ok(false)},ms)});
+  const frame=()=>new Promise(ok=>{if(vd.requestVideoFrameCallback){let done=false;vd.requestVideoFrameCallback(()=>{done=true;ok()});setTimeout(()=>{if(!done)ok()},400)}else setTimeout(ok,200)});
+  try{
+    if(!(await wait('loadedmetadata',15000))&&!vd.videoWidth)throw new Error('이 영상 형식은 열 수 없어요');
+    await wait('loadeddata',5000);
+    try{await vd.play();vd.pause()}catch(_){}
+    const dur=isFinite(vd.duration)?vd.duration:0;
+    const w=vd.videoWidth||1280,h=vd.videoHeight||720,k=Math.min(1,1600/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);const cx=c.getContext('2d',{willReadFrequently:true});
+    const dark=()=>{const d=cx.getImageData(0,0,c.width,c.height).data;let sum=0,n=0;for(let i=0;i<d.length;i+=4*97){sum+=d[i]+d[i+1]+d[i+2];n++}return sum/(n*3)<14};
+    const times=[.5,1.5,3,dur*.25,dur*.5].filter((t,i,a)=>t<dur||i===0).map(t=>Math.min(t,Math.max(0,dur-.1)));
+    for(const t of times){if(Math.abs(vd.currentTime-t)>.05){vd.currentTime=t;await wait('seeked',4000)}await frame();cx.drawImage(vd,0,0,c.width,c.height);if(!dark())break}
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));if(!blob)throw new Error('첫 장면을 만들지 못했어요');
+    return{blob,dur}}finally{vd.removeAttribute('src');vd.load?.();vd.remove();URL.revokeObjectURL(url)}}
 function wantsFor(pid){return all('want').filter(w=>w.item===pid&&w.on&&w.member)}
 function videoBar(p){const ws=wantsFor(p.id);const mine=p.author===myId;
   if(mine){const wait=ws.filter(w=>!w.sent);return `<div class="vbar">${ws.length?`<p class="small">${ws.map(w=>`<span class="vw ${w.sent?'done':''}">${esc(nameOf(w.member))} ${w.sent?'보냄':'원해요'}</span>`).join('')}</p>`:'<p class="small faint">아직 받고 싶다는 사람이 없어요</p>'}
-    <button class="btn ${wait.length?'':'line'} sm" data-vsend="${p.id}">영상 보내기${wait.length?` (${wait.length}명)`:''}</button></div>`}
+    <div class="row" style="gap:6px"><button class="btn ${wait.length?'':'line'} sm" data-vsend="${p.id}">영상 보내기${wait.length?` (${wait.length}명)`:''}</button><button class="btn quiet sm" data-vre="${p.id}">첫 장면 다시 만들기</button></div></div>`}
   const me=ws.find(w=>w.member===myId);return `<div class="vbar"><p class="small faint">원본은 ${esc(nameOf(p.author))}의 휴대폰에 있어요${ws.length?` · ${ws.length}명 원해요`:''}</p>
     ${me&&me.sent?`<span class="vw done">${esc(nameOf(p.author))} 님이 보냈어요</span>`:myId?`<button class="btn ${me?'quiet':'line'} sm" data-want="${p.id}" aria-pressed="${!!me}">${me?'받고 싶어요 취소':'나도 받고 싶어요'}</button>`:''}</div>`}
 function sendVideo(pid){
@@ -1522,7 +1531,7 @@ function rAlbum(v){
   const order=keys.flatMap(k=>by[k]);
   const who=members().filter(m=>counts[m.id]);
   v.innerHTML=chapHead('album','날짜별로 모인 사진입니다.<br>사진 아래에 한 줄을 적으면 책의 사진 설명이 돼요.')+`
-    <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진 추가<input type="file" class="file" id="aF" accept="image/*" multiple></label><label class="btn line">영상 추가<input type="file" class="file" id="aV" accept="video/*"></label></div>
+    <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진·영상 추가<input type="file" class="file" id="aF" accept="image/*,video/*" multiple></label></div>
     ${who.length>1||albumWho!=='all'?`<div class="whochips" role="group" aria-label="사람별 보기"><button data-aw="all" class="${albumWho==='all'?'on':''}">전체 ${all_.length}</button>${who.map(m=>`<button data-aw="${m.id}" class="${albumWho===m.id?'on':''}">${face(m,22)}${esc(m.name)} ${counts[m.id]}</button>`).join('')}</div>`:''}
     ${keys.map(k=>`<div class="day-h"><b>${k==='x'?'날짜 없음':Number(k)+1+'일째'}</b><span>${ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${by[k].length}장</span></div>
       <div class="album">${by[k].map(p=>`<figure><button class="ph-open" data-open="${order.indexOf(p)}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy">${p.kind==='video'?`<span class="vbadge" aria-label="영상 ${durTxt(p.dur)}"><i>▶</i>${durTxt(p.dur)}</span>`:''}</button>${canDel(p.author)?`<input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="${p.kind==='video'?'영상 설명':'사진 설명'}" aria-label="사진 설명">`:p.caption?`<p class="small" style="padding:6px 0;border-bottom:1.5px solid transparent">${esc(p.caption)}</p>`:''}${reactBar(p.id)}${p.kind==='video'?videoBar(p):''}<div class="meta"><span>${esc(nameOf(p.author))}</span>${canDel(p.author)?`<button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button>`:''}</div></figure>`).join('')}</div>`).join('')}
@@ -1531,13 +1540,17 @@ function rAlbum(v){
   $$('[data-aw]',v).forEach(b=>b.onclick=()=>{albumWho=b.dataset.aw;render()});
   $$('[data-open]',v).forEach(b=>b.onclick=()=>openViewer(order,Number(b.dataset.open)));
   const rebar=pid=>{const o=$(`[data-rx="${pid}"]`,v);if(o){o.outerHTML=reactBar(pid);bindReacts(v,rebar)}};bindReacts(v,rebar);
-  $('#aV').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return}
-    toast('영상 첫 장면을 만드는 중…',8000);try{const t=await videoThumb(f);const {id,path}=await savePhoto(t.blob);
-      await put('media',id,{kind:'video',path,dur:t.dur,vname:f.name||'',vsize:f.size||0,vdate:f.lastModified||null,author:myId,day:Number($('#aD').value)||0,created:Date.now()});
-      toast('영상을 올렸어요. 원본은 내 휴대폰 사진 앱에 그대로 있어요.',4000);render()}catch(err){toast('영상을 읽지 못했어요: '+err.message)}};
+  const addVideos=async(vs,day)=>{let n=0;for(const f of vs){toast(`영상 첫 장면을 만드는 중… ${n+1}/${vs.length}`,8000);try{const t=await videoThumb(f);const {id,path}=await savePhoto(t.blob);
+      await put('media',id,{kind:'video',path,dur:t.dur,vname:f.name||'',vsize:f.size||0,vdate:f.lastModified||null,author:myId,day,created:Date.now()});n++}catch(err){toast('영상을 읽지 못했어요: '+err.message,4000)}}return n};
+  $$('[data-vre]',v).forEach(b=>b.onclick=()=>{const inp=document.createElement('input');inp.type='file';inp.accept='video/*';inp.onchange=async()=>{const f=inp.files[0];if(!f)return;toast('첫 장면을 다시 만드는 중…',8000);
+    try{const t=await videoThumb(f);const {path}=await savePhoto(t.blob);await patch('media',b.dataset.vre,{path,dur:t.dur||one('media',b.dataset.vre)?.dur});toast('첫 장면을 바꿨어요');render()}catch(err){toast('영상을 읽지 못했어요: '+err.message)}};inp.click()});
   $$('[data-want]',v).forEach(b=>b.onclick=()=>{const id=b.dataset.want+'__'+myId;const cur=one('want',id);put('want',id,{item:b.dataset.want,member:myId,on:!(cur&&cur.on),sent:false},{silent:true});render()});
   $$('[data-vsend]',v).forEach(b=>b.onclick=()=>sendVideo(b.dataset.vsend));
-  $('#aF').onchange=async e=>{const fs=[...e.target.files];if(!fs.length)return;const n=(await addPhotos(fs,{day:Number($('#aD').value)||0})).length;if(n)toast(`${n}장 추가했어요`);render()};
+  $('#aF').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;const day=Number($('#aD').value)||0;
+    const isV=f=>(f.type||'').startsWith('video/')||/\.(mov|mp4|m4v|webm|3gp)$/i.test(f.name||'');const vs=fs.filter(isV),ps=fs.filter(f=>!isV(f));
+    if(vs.length&&!myId){toast('영상은 참가자 장에서 나를 등록한 뒤 올릴 수 있어요');return}
+    const n=ps.length?(await addPhotos(ps,{day})).length:0;const m=vs.length?await addVideos(vs,day):0;
+    if(n||m)toast([n&&`사진 ${n}장`,m&&`영상 ${m}개`].filter(Boolean).join(', ')+' 추가했어요'+(m?'. 영상 원본은 내 휴대폰에 그대로 있어요.':''),4000);render()};
   $$('[data-mx]',v).forEach(b=>b.onclick=()=>ask('이 사진을 지울까요?','지우기',async()=>{const p=one('media',b.dataset.mx);await remove('media',b.dataset.mx);if(p?.path)BE.delBlob(p.path)}));
 }
 /* 사진 크게 보기: 넘기기(밀기, 화살표), 닫기(✕, Esc, 배경 누르기) */
