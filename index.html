@@ -153,6 +153,10 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .ticket.per{border-color:var(--line);box-shadow:inset 6px 0 0 var(--red)}.ticket.per .main{padding-left:24px}.ticket.per .stub::before,.ticket.per .stub::after{border-color:var(--line)}
 .tk-sub{font-size:11.5px;color:var(--ink2);margin-top:9px;line-height:1.35;text-align:center}.tk-sub b{color:var(--ink)}
 .tk-meta b{color:var(--ink);font-weight:800}
+.vbadge{position:absolute;left:8px;bottom:8px;background:rgba(20,33,61,.82);color:#fff;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px 3px 7px;display:inline-flex;gap:4px;align-items:center}.vbadge i{font-style:normal;font-size:10px}
+.ph-open{position:relative}
+.vbar{margin-top:6px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}.vbar p{margin:0;display:flex;flex-wrap:wrap;gap:4px}
+.vw{display:inline-block;font-size:12px;border-radius:999px;padding:2px 8px;background:#FFF4CC;color:var(--ink)}.vw.done{background:var(--bg);color:var(--ink3)}
 .pb-t{margin:10px 0 0 40px;background:var(--bg);border-radius:12px;padding:0 12px}
 .pb-t summary{list-style:none;display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font-size:14px;font-weight:700}
 .pb-t summary::-webkit-details-marker{display:none}.pb-t summary::after{content:'›';margin-left:6px;color:var(--ink3);font-size:20px;line-height:1;transition:transform .15s}.pb-t[open] summary::after{transform:rotate(90deg)}
@@ -396,7 +400,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-부호';
+const APP_VERSION='11.20-영상';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1474,6 +1478,40 @@ function toggleReact(pid,k){if(!myId){toast('먼저 참가자 장에서 나를 �
   put('react',id,{item:pid,member:myId,e:k,on},{silent:true});return true}
 function bindReacts(root,after){$$('[data-rx]',root).forEach(bar=>$$('[data-re]',bar).forEach(b=>b.onclick=e=>{e.stopPropagation();if(toggleReact(bar.dataset.rx,b.dataset.re))after(bar.dataset.rx)}))}
 let albumWho='all';
+/* ---- 영상: 서버에는 첫 장면 사진만. 원본은 올린 사람 휴대폰에만 있고, 원하는 사람에게 공유 창으로 보냄 ---- */
+const durTxt=d=>{d=Math.round(d||0);return Math.floor(d/60)+':'+String(d%60).padStart(2,'0')};
+async function videoThumb(file){
+  const url=URL.createObjectURL(file);const vd=document.createElement('video');vd.muted=true;vd.playsInline=true;vd.preload='auto';vd.src=url;
+  try{await new Promise((ok,no)=>{vd.onloadedmetadata=ok;vd.onerror=()=>no(new Error('이 영상 형식은 열 수 없어요'));setTimeout(()=>no(new Error('시간이 너무 걸려요')),15000)});
+    const dur=isFinite(vd.duration)?vd.duration:0;vd.currentTime=Math.min(.5,dur/2||0);
+    await new Promise(ok=>{vd.onseeked=ok;setTimeout(ok,4000)});
+    const w=vd.videoWidth||1280,h=vd.videoHeight||720,k=Math.min(1,1600/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);
+    c.getContext('2d').drawImage(vd,0,0,c.width,c.height);const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));if(!blob)throw new Error('첫 장면을 만들지 못했어요');
+    return{blob,dur}}finally{URL.revokeObjectURL(url)}}
+function wantsFor(pid){return all('want').filter(w=>w.item===pid&&w.on&&w.member)}
+function videoBar(p){const ws=wantsFor(p.id);const mine=p.author===myId;
+  if(mine){const wait=ws.filter(w=>!w.sent);return `<div class="vbar">${ws.length?`<p class="small">${ws.map(w=>`<span class="vw ${w.sent?'done':''}">${esc(nameOf(w.member))} ${w.sent?'보냄':'원해요'}</span>`).join('')}</p>`:'<p class="small faint">아직 받고 싶다는 사람이 없어요</p>'}
+    <button class="btn ${wait.length?'':'line'} sm" data-vsend="${p.id}">영상 보내기${wait.length?` (${wait.length}명)`:''}</button></div>`}
+  const me=ws.find(w=>w.member===myId);return `<div class="vbar"><p class="small faint">원본은 ${esc(nameOf(p.author))}의 휴대폰에 있어요${ws.length?` · ${ws.length}명 원해요`:''}</p>
+    ${me&&me.sent?`<span class="vw done">${esc(nameOf(p.author))} 님이 보냈어요</span>`:myId?`<button class="btn ${me?'quiet':'line'} sm" data-want="${p.id}" aria-pressed="${!!me}">${me?'받고 싶어요 취소':'나도 받고 싶어요'}</button>`:''}</div>`}
+function sendVideo(pid){
+  const p=one('media',pid);if(!p)return;const ws=wantsFor(pid).filter(w=>!w.sent);
+  const when=p.vdate?new Date(p.vdate).toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+  openSheet(`<h2>영상 보내기</h2>
+    <p class="muted small" style="margin:6px 0 12px">사진 앱에서 이 영상을 한 번 골라 주세요. 그다음 공유 창에서 카톡이나 메시지를 고르면 돼요.</p>
+    <div class="row" style="gap:12px;align-items:center"><img src="${esc(mediaUrl(p.path))}" alt="" style="width:120px;border-radius:12px"><div class="small">${when?`<b>${esc(when)}</b><br>`:''}길이 ${durTxt(p.dur)}${p.vname?`<br><span class="faint">${esc(p.vname)}</span>`:''}${ws.length?`<br>보낼 사람: ${ws.map(w=>esc(nameOf(w.member))).join(', ')}`:''}</div></div>
+    <div class="sp"></div><label class="btn" style="display:block;text-align:center">사진 앱에서 이 영상 고르기<input type="file" class="file" id="vPick" accept="video/*"></label>
+    <div id="vReady"></div><div class="sp"></div><button class="btn quiet" id="vNo">닫기</button>`);
+  $('#vNo').onclick=closeSheet;
+  $('#vPick').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+    let tb='',diff=false;try{const t=await videoThumb(f);tb=URL.createObjectURL(t.blob);diff=!!p.dur&&Math.abs(t.dur-p.dur)>1.5}catch(_){}
+    $('#vReady').innerHTML=`<div class="note" style="margin-top:12px"><div class="row" style="gap:10px;align-items:center">${tb?`<img src="${tb}" alt="" style="width:90px;border-radius:10px">`:''}<div class="small">${diff?'<b style="color:var(--red)">길이가 달라요. 같은 영상이 맞는지 확인해 주세요.</b>':'<b>고른 영상</b>'}<br>${esc(f.name||'')}</div></div></div>
+      <div class="sp"></div><button class="btn" id="vShare" style="width:100%">공유 창 열기</button>`;
+    $('#vShare').onclick=async()=>{
+      if(!(navigator.canShare&&navigator.canShare({files:[f]}))){toast('이 기기에서는 공유 창을 열 수 없어요. 휴대폰에서 해 주세요.',4000);return}
+      try{await navigator.share({files:[f],title:p.caption||'여행 영상'});ws.forEach(w=>put('want',w.item+'__'+w.member,{item:w.item,member:w.member,on:true,sent:true,sentAt:Date.now()},{silent:true}));closeSheet();toast('보냈어요');render()}
+      catch(err){if(err.name!=='AbortError')toast('보내지 못했어요: '+err.message)}}};
+}
 function rAlbum(v){
   const ds=days(),all_=photos();
   const counts={};all_.forEach(p=>counts[p.author]=(counts[p.author]||0)+1);
@@ -1484,15 +1522,21 @@ function rAlbum(v){
   const order=keys.flatMap(k=>by[k]);
   const who=members().filter(m=>counts[m.id]);
   v.innerHTML=chapHead('album','날짜별로 모인 사진입니다.<br>사진 아래에 한 줄을 적으면 책의 사진 설명이 돼요.')+`
-    <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진 추가<input type="file" class="file" id="aF" accept="image/*" multiple></label></div>
+    <div class="row"><select class="sel" id="aD" style="width:auto" aria-label="날짜">${ds.map(d=>`<option value="${d.i}" ${d.i===Math.max(0,todayIdx())?'selected':''}>${dayFull(d.i)}</option>`).join('')||'<option value="0">1일째</option>'}</select><label class="btn">사진 추가<input type="file" class="file" id="aF" accept="image/*" multiple></label><label class="btn line">영상 추가<input type="file" class="file" id="aV" accept="video/*"></label></div>
     ${who.length>1||albumWho!=='all'?`<div class="whochips" role="group" aria-label="사람별 보기"><button data-aw="all" class="${albumWho==='all'?'on':''}">전체 ${all_.length}</button>${who.map(m=>`<button data-aw="${m.id}" class="${albumWho===m.id?'on':''}">${face(m,22)}${esc(m.name)} ${counts[m.id]}</button>`).join('')}</div>`:''}
     ${keys.map(k=>`<div class="day-h"><b>${k==='x'?'날짜 없음':Number(k)+1+'일째'}</b><span>${ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${by[k].length}장</span></div>
-      <div class="album">${by[k].map(p=>`<figure><button class="ph-open" data-open="${order.indexOf(p)}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy"></button>${canDel(p.author)?`<input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="사진 설명" aria-label="사진 설명">`:p.caption?`<p class="small" style="padding:6px 0;border-bottom:1.5px solid transparent">${esc(p.caption)}</p>`:''}${reactBar(p.id)}<div class="meta"><span>${esc(nameOf(p.author))}</span>${canDel(p.author)?`<button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button>`:''}</div></figure>`).join('')}</div>`).join('')}
+      <div class="album">${by[k].map(p=>`<figure><button class="ph-open" data-open="${order.indexOf(p)}" aria-label="크게 보기"><img src="${esc(mediaUrl(p.path))}" alt="${esc(p.caption||'')}" loading="lazy">${p.kind==='video'?`<span class="vbadge" aria-label="영상 ${durTxt(p.dur)}"><i>▶</i>${durTxt(p.dur)}</span>`:''}</button>${canDel(p.author)?`<input class="under" data-f="media/${p.id}/caption" value="${esc(p.caption||'')}" placeholder="${p.kind==='video'?'영상 설명':'사진 설명'}" aria-label="사진 설명">`:p.caption?`<p class="small" style="padding:6px 0;border-bottom:1.5px solid transparent">${esc(p.caption)}</p>`:''}${reactBar(p.id)}${p.kind==='video'?videoBar(p):''}<div class="meta"><span>${esc(nameOf(p.author))}</span>${canDel(p.author)?`<button class="link" style="font-size:12px;font-weight:500;color:var(--ink3)" data-mx="${p.id}">지우기</button>`:''}</div></figure>`).join('')}</div>`).join('')}
     ${all_.length?'':'<div class="empty"><b>아직 사진이 없어요</b>여행일기에 올린 사진도 여기에 모입니다.</div>'}`;
   bindAuto(v);
   $$('[data-aw]',v).forEach(b=>b.onclick=()=>{albumWho=b.dataset.aw;render()});
   $$('[data-open]',v).forEach(b=>b.onclick=()=>openViewer(order,Number(b.dataset.open)));
   const rebar=pid=>{const o=$(`[data-rx="${pid}"]`,v);if(o){o.outerHTML=reactBar(pid);bindReacts(v,rebar)}};bindReacts(v,rebar);
+  $('#aV').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return}
+    toast('영상 첫 장면을 만드는 중…',8000);try{const t=await videoThumb(f);const {id,path}=await savePhoto(t.blob);
+      await put('media',id,{kind:'video',path,dur:t.dur,vname:f.name||'',vsize:f.size||0,vdate:f.lastModified||null,author:myId,day:Number($('#aD').value)||0,created:Date.now()});
+      toast('영상을 올렸어요. 원본은 내 휴대폰 사진 앱에 그대로 있어요.',4000);render()}catch(err){toast('영상을 읽지 못했어요: '+err.message)}};
+  $$('[data-want]',v).forEach(b=>b.onclick=()=>{const id=b.dataset.want+'__'+myId;const cur=one('want',id);put('want',id,{item:b.dataset.want,member:myId,on:!(cur&&cur.on),sent:false},{silent:true});render()});
+  $$('[data-vsend]',v).forEach(b=>b.onclick=()=>sendVideo(b.dataset.vsend));
   $('#aF').onchange=async e=>{const fs=[...e.target.files];if(!fs.length)return;const n=(await addPhotos(fs,{day:Number($('#aD').value)||0})).length;if(n)toast(`${n}장 추가했어요`);render()};
   $$('[data-mx]',v).forEach(b=>b.onclick=()=>ask('이 사진을 지울까요?','지우기',async()=>{const p=one('media',b.dataset.mx);await remove('media',b.dataset.mx);if(p?.path)BE.delBlob(p.path)}));
 }
@@ -1507,7 +1551,7 @@ function openViewer(list,idx){
   const img=el.querySelector('img');
   const show=()=>{const p=list[i];img.src=mediaUrl(p.path);img.alt=p.caption||'';
     el.querySelector('.vcount').textContent=`${i+1} / ${list.length}`;
-    el.querySelector('.vcap').innerHTML=`${p.caption?`<b>${esc(p.caption)}</b>`:''}<span>${esc(nameOf(p.author))}${p.day!=null?`, ${p.day+1}일째`:''}</span>${reactBar(p.id)}${rwho(p.id)}`;
+    el.querySelector('.vcap').innerHTML=`${p.caption?`<b>${esc(p.caption)}</b>`:''}<span>${p.kind==='video'?`▶ 영상 ${durTxt(p.dur)} · 원본은 `:''}${esc(nameOf(p.author))}${p.kind==='video'?'의 휴대폰에 있어요':''}${p.day!=null?`, ${p.day+1}일째`:''}</span>${reactBar(p.id)}${rwho(p.id)}`;
     bindReacts(el,()=>show());
     el.querySelector('.vprev').style.visibility=i>0?'visible':'hidden';el.querySelector('.vnext').style.visibility=i<list.length-1?'visible':'hidden';
     [list[i-1],list[i+1]].forEach(q=>{if(q){const pre=new Image();pre.src=mediaUrl(q.path)}})};
@@ -1746,7 +1790,7 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   const prep=all('prep').sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));const checks=all('check');
   const ex=expenseRows(),{bal,tr}=settle(),total=ex.reduce((s,e)=>s+e.amount,0);
   const rx=p=>{const r=reactsFor(p.id);const t=REACTS.filter(([k])=>r[k].length).map(([k,e])=>`${e} ${r[k].length}`).join('  ');return t?`<span class="rx">${t}</span>`:''};
-  const fig=p=>{const t=rx(p);return `<figure><img src="${src[p.path]||''}" alt="">${p.caption||t?`<figcaption>${esc(p.caption||'')}${t}</figcaption>`:''}</figure>`};
+  const fig=p=>{const t=rx(p);const vt=p.kind==='video'?`<span class="rx">▶ 영상 ${durTxt(p.dur)} · ${esc(nameOf(p.author))}</span>`:'';return `<figure><img src="${src[p.path]||''}" alt="">${p.caption||t||vt?`<figcaption>${esc(p.caption||'')}${vt}${t}</figcaption>`:''}</figure>`};
   const dh=i=>`<div class="dh"><b>${i+1}일째</b>${ds[i]?`<span>${ds[i].date.getFullYear()}. ${ds[i].md} ${ds[i].wd}요일</span>`:''}</div>`;
   const chap=(n,t)=>`<header class="ch"><span class="cn">${n}</span><h2>${t}</h2></header>`;
   const period=ds.length?`${ds[0].date.getFullYear()}. ${ds[0].md} – ${ds[ds.length-1].md}`:'';
