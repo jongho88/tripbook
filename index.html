@@ -375,6 +375,8 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
 .sync.err i{background:var(--red)}
 .caric{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .caric canvas{width:132px;height:132px;border-radius:50%;background:var(--bg)}
+.refl .refl-h{width:100%;text-align:left;cursor:pointer}.refl .rp-n{margin-left:auto;white-space:nowrap}.refl .rp-c{color:var(--ink3);font-size:14px;transition:transform .15s;margin-left:6px}
+.refl.shut .rp-c{transform:rotate(-90deg)}.refl.shut .refl-b{display:none}.refl.shut{padding-bottom:14px}
 .rseg{display:flex;width:max-content;background:#fff;border:1px solid var(--line,#DDE2EC);border-radius:999px;padding:3px;margin:0 0 16px}
 .rseg button{padding:7px 16px;border-radius:999px;font-size:14px;color:var(--ink2)}
 .rseg button.on{background:var(--cobalt);color:#fff;font-weight:700}
@@ -400,7 +402,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-앨범설명';
+const APP_VERSION='11.20-뒤돌아보기접기';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1579,7 +1581,7 @@ function openViewer(list,idx){
 }
 
 /* ---- 7 뒤돌아보기 ---- */
-let reflMode='person';const reflOpen=new Set([REFLQ[0][0]]);
+let reflMode='person';const reflPOpen=new Set();const reflOpen=new Set([REFLQ[0][0]]);
 function reflByQ(ms){
   return REFLQ.map(([k,q])=>{const ans=ms.map(m=>[m,(one('refl',m.id)||{})[k]]).filter(([,a])=>a&&String(a).trim());const open=reflOpen.has(k);const mineDone=ans.some(([m])=>m.id===myId);
     return `<section class="rq${open?' open':''}"><button type="button" class="rq-h" data-rq="${k}" aria-expanded="${open}"><span>${q}</span><span class="rq-n">${ans.length?ans.length+'명':'아직 없음'} ${open?'▴':'▾'}</span></button>
@@ -1593,16 +1595,20 @@ function rRefl(v){
     v.innerHTML=chapHead('refl','돌아와서 한 사람에 한 페이지. 질문에 답만 해도 글이 됩니다. 내 페이지만 고칠 수 있어요.')+seg+reflByQ(ms);
     bindSeg();
     $$('[data-rq]',v).forEach(b=>b.onclick=()=>{const k=b.dataset.rq;reflOpen.has(k)?reflOpen.delete(k):reflOpen.add(k);rRefl(v)});
-    $$('[data-rqw]',v).forEach(b=>b.onclick=()=>{const k=b.dataset.rqw;reflMode='person';rRefl(v);const t=$('#r_'+k,v);if(t){t.scrollIntoView({block:'center'});t.focus()}});
+    $$('[data-rqw]',v).forEach(b=>b.onclick=()=>{const k=b.dataset.rqw;reflMode='person';reflPOpen.delete('!'+myId);rRefl(v);const t=$('#r_'+k,v);if(t){t.scrollIntoView({block:'center'});t.focus()}});
     return;
   }
   v.innerHTML=chapHead('refl','돌아와서 한 사람에 한 페이지. 질문에 답만 해도 글이 됩니다. 내 페이지만 고칠 수 있어요.')+seg+
-  ms.map(m=>{const r=one('refl',m.id)||{};const mine=m.id===myId;return `<section class="refl"><div class="refl-h">${face(m,48)}<h3>${esc(m.name)}</h3>${mine?'<span class="small muted">내 페이지</span>':''}</div>
+  ms.map(m=>{const r=one('refl',m.id)||{};const mine=m.id===myId;const n=REFLQ.filter(([k])=>r[k]&&String(r[k]).trim()).length;const open=reflPOpen.has(m.id)||(mine&&!reflPOpen.has('!'+m.id));
+    return `<section class="refl${open?'':' shut'}" data-rp="${m.id}"><button type="button" class="refl-h" aria-expanded="${open}">${face(m,48)}<h3>${esc(m.name)}</h3><span class="small muted rp-n">${mine?'내 페이지 · ':''}${n?`${REFLQ.length}개 중 ${n}개`:'아직 안 씀'}</span><span class="rp-c" aria-hidden="true">▾</span></button><div class="refl-b">
     ${REFLQ.map(([k,q])=>mine?`<label class="q" for="r_${k}" style="display:block">${q}</label><textarea class="ta" id="r_${k}" data-f="refl/${m.id}/${k}" style="min-height:${k==='free'?120:70}px">${esc(r[k]||'')}</textarea>`:(r[k]?`<div class="q">${q}</div><p class="a">${esc(r[k])}</p>`:'')).join('')}
     ${mine?`<div class="row" style="margin-top:14px;align-items:center"><button class="btn" id="rSave">저장</button><span class="small muted" id="rStat">${r.saved?'저장됨 '+new Date(r.saved).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):''}</span></div>`:''}
-    ${!mine&&!REFLQ.some(([k])=>r[k])?'<p class="faint">아직 쓰지 않았어요</p>':''}</section>`}).join('')+
+    ${!mine&&!REFLQ.some(([k])=>r[k])?'<p class="faint">아직 쓰지 않았어요</p>':''}</div></section>`}).join('')+
   (ms.length?'':'<div class="empty"><b>참가자를 먼저 등록해 주세요</b></div>');
   bindAuto(v);bindSeg();
+  /* 사람별 접기: 내 페이지는 처음에 펼침, 다른 사람은 접힘. 다시 그려도 기억 */
+  $$('[data-rp]',v).forEach(sec=>sec.querySelector('.refl-h').onclick=()=>{const id=sec.dataset.rp,mine=id===myId;const shut=sec.classList.toggle('shut');sec.querySelector('.refl-h').setAttribute('aria-expanded',!shut);
+    if(mine){shut?reflPOpen.add('!'+id):reflPOpen.delete('!'+id)}else{shut?reflPOpen.delete(id):reflPOpen.add(id)}});
   const sb=$('#rSave',v);if(!sb)return;
   const save=async(manual)=>{const d={};REFLQ.forEach(([k])=>{const t=$('#r_'+k,v);if(t)d[k]=t.value});const cur=one('refl',myId)||{};
     if(!manual&&REFLQ.every(([k])=>(cur[k]??'')===(d[k]??'')))return;
