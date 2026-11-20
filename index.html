@@ -377,6 +377,10 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
 .caric canvas{width:132px;height:132px;border-radius:50%;background:var(--bg)}
 .refl .refl-h{width:100%;text-align:left;cursor:pointer}.refl .rp-n{margin-left:auto;white-space:nowrap}.refl .rp-c{color:var(--ink3);font-size:14px;transition:transform .15s;margin-left:6px}
 .refl.shut .rp-c{transform:rotate(-90deg)}.refl.shut .refl-b{display:none}.refl.shut{padding-bottom:14px}
+.dist{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:6px 0 14px}
+.dist-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}.dist-t span{font-size:14px;color:var(--ink2);font-weight:700}.dist-t b{font-size:20px;font-weight:800;white-space:nowrap}.dist-t b .faint{font-size:13px;font-weight:600}
+.dist-d{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.dist-d span{font-size:12.5px;background:var(--bg);border-radius:10px;padding:5px 9px;white-space:nowrap}.dist-d span.on{outline:2px solid var(--cobalt)}.dist-d i{font-style:normal;font-weight:800;margin-right:5px}.dist-d .faint{font-size:11.5px}
+.tripmap .mapbox{margin-bottom:12px}
 .rseg{display:flex;width:max-content;background:#fff;border:1px solid var(--line,#DDE2EC);border-radius:999px;padding:3px;margin:0 0 16px}
 .rseg button{padding:7px 16px;border-radius:999px;font-size:14px;color:var(--ink2)}
 .rseg button.on{background:var(--cobalt);color:#fff;font-weight:700}
@@ -402,7 +406,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-뒤돌아보기접기';
+const APP_VERSION='11.20-내표지';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -1001,7 +1005,30 @@ function activeToday(){const t=new Date();const same=ms=>{if(!ms)return false;co
     all(c).forEach(r=>{const who=f?r[f]:r.id;if(same((tf&&r[tf])||r._t))set.add(who)}));
   set.delete(null);set.delete(undefined);set.delete('');const ids=new Set(members().map(m=>m.id));return new Set([...set].filter(x=>ids.has(x)))}
 /* 표지 사진: 16:10 틀에 맞춰 끌어서 위치, 슬라이더나 두 손가락으로 크기 */
-async function coverCrop(blob,prev,isNew){
+/* 내 표지: 표지 사진과 제목·부제만 각자 바꿈. 내 화면과 내가 받는 책에만 적용 */
+function myCover(){return myId?one('mycover',myId)||{}:{}}
+function coverMeta(){const m=meta(),c=myCover();const o={...m,mine:false};
+  if(c.title){o.title=c.title;o.mine=true}if(c.sub){o.sub=c.sub;o.mine=true}
+  if(c.cover){o.cover=c.cover;o.coverOrig=c.coverOrig;o.coverCrop=c.coverCrop;o.coverBy=myId;o.mineCover=true;o.mine=true}return o}
+function editMyCover(){
+  if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return}
+  const m=meta(),c=myCover();
+  openSheet(`<h2>내 표지 꾸미기</h2><p class="muted small" style="margin:6px 0 4px">내 화면과 내가 받는 책에만 바뀌어요. 다른 사람 표지는 그대로예요.</p>
+    <label class="lab" for="mcT">제목</label><input class="in" id="mcT" value="${esc(c.title||'')}" placeholder="${esc(m.title||'여행 제목')}">
+    <label class="lab" for="mcS">한 줄 소개</label><input class="in" id="mcS" value="${esc(c.sub||'')}" placeholder="${esc(m.sub||'한 줄 소개')}">
+    <label class="lab">표지 사진</label>${c.cover?`<img src="${esc(mediaUrl(c.cover))}" alt="" style="width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:14px;display:block;margin-bottom:8px">`:'<p class="small faint" style="margin:0 0 8px">지금은 공동 표지 사진이 보여요.</p>'}
+    <div class="row" style="gap:6px"><label class="btn line sm">${c.cover?'다른 사진 고르기':'내 사진 고르기'}<input type="file" class="file" accept="image/*" id="mcF"></label>${c.cover?'<button class="btn line sm" id="mcAdj">위치·크기 조정</button>':''}</div>
+    <p class="small faint" style="margin-top:6px">비워 두면 공동 표지의 제목과 사진이 그대로 나와요.</p>
+    <div class="sp"></div><div class="row"><button class="btn grow" id="mcOk">저장</button><button class="btn quiet" id="mcNo">취소</button></div>
+    ${c.title||c.sub||c.cover?'<button class="btn quiet sm" id="mcReset" style="margin-top:12px">공동 표지로 되돌리기</button>':''}`);
+  $('#mcNo').onclick=closeSheet;
+  $('#mcOk').onclick=()=>{const d={title:$('#mcT').value.trim(),sub:$('#mcS').value.trim()};closeSheet();patch('mycover',myId,d);toast('내 표지를 바꿨어요')};
+  const keep=()=>patch('mycover',myId,{title:$('#mcT').value.trim(),sub:$('#mcS').value.trim()},{silent:true});
+  $('#mcF').onchange=async e=>{const f=e.target.files[0];if(!f)return;await keep();try{const b=await shrink(f,2400,.88);coverCrop(b,null,true,'mine')}catch(err){toast('사진을 열지 못했어요: '+err.message)}};
+  const adj=$('#mcAdj');if(adj)adj.onclick=async()=>{await keep();try{const b=await BE.getBlob(c.coverOrig||c.cover);coverCrop(b,c.coverOrig?c.coverCrop:null,false,'mine')}catch(err){toast('사진을 열지 못했어요: '+err.message)}};
+  const rs=$('#mcReset');if(rs)rs.onclick=()=>{closeSheet();ask('내 표지를 지우고 공동 표지로 되돌릴까요?','되돌리기',()=>{put('mycover',myId,{});toast('공동 표지로 되돌렸어요')},false,'그대로 두기')};
+}
+async function coverCrop(blob,prev,isNew,target){
   const url=URL.createObjectURL(blob);let img;try{img=await loadImg(url)}catch(e){toast(e.message);return}
   const W=img.naturalWidth,H=img.naturalHeight,R=16/10;
   const maxW=Math.min(W,H*R);              /* 틀에 꽉 차는 가장 큰 잘라내기 폭 */
@@ -1031,14 +1058,14 @@ async function coverCrop(blob,prev,isNew){
   $('#ccOk').onclick=async()=>{$('#ccOk').disabled=true;toast('표지 사진 저장 중…',8000);
     try{const out=document.createElement('canvas');out.width=1600;out.height=1000;const h=c.w/R;out.getContext('2d').drawImage(img,c.x-c.w/2,c.y-h/2,c.w,h,0,0,1600,1000);
       const cut=await new Promise(r=>out.toBlob(r,'image/jpeg',.86));const d={cover:(await savePhoto(cut)).path,coverCrop:{x:Math.round(c.x),y:Math.round(c.y),w:Math.round(c.w)}};
-      if(isNew){d.coverOrig=(await savePhoto(blob)).path;d.coverBy=myId||null}
-      closeSheet();URL.revokeObjectURL(url);await patch('trip','meta',d);toast('표지 사진을 맞췄어요')}
+      if(isNew){d.coverOrig=(await savePhoto(blob)).path;if(target!=='mine')d.coverBy=myId||null}
+      closeSheet();URL.revokeObjectURL(url);if(target==='mine')await patch('mycover',myId,d);else await patch('trip','meta',d);toast(target==='mine'?'내 표지 사진을 맞췄어요':'표지 사진을 맞췄어요')}
     catch(err){$('#ccOk').disabled=false;toast('저장하지 못했어요: '+err.message)}};
 }
 let infoOpen=false;
 function rCover(v){
   const todayActive=activeToday();
-  const m=meta(),ms=members(),st=status(),ds=days();
+  const m=meta(),cm=coverMeta(),ms=members(),st=status(),ds=days();
   const prep=all('prep'),logs=all('log'),ph=photos().filter(p=>!p.role),refl=all('refl').filter(r=>REFLQ.some(([k])=>r[k]));
   const plans=all('plan');const ex=expenseRows();
   const toc=[
@@ -1053,10 +1080,11 @@ function rCover(v){
   ];
   v.innerHTML=`${a2hsCard()}
     ${m.place?`<p class="cover-place">${esc(m.place)}</p>`:''}
-    <h1 class="cover-title">${esc(m.title||'여행 제목을 정해 주세요')}</h1>
-    ${m.sub?`<p class="cover-sub">${esc(m.sub)}</p>`:'<div style="height:14px"></div>'}
+    <h1 class="cover-title">${esc(cm.title||'여행 제목을 정해 주세요')}</h1>
+    ${cm.sub?`<p class="cover-sub">${esc(cm.sub)}</p>`:'<div style="height:14px"></div>'}
     ${ms.length?`<div class="faces cover-faces ${coverDropped?'':'drop'}" aria-label="함께 가는 사람들">${ms.map((x,i)=>`<button class="cf ${todayActive.has(x.id)?'today':''}" data-cf="${x.id}" style="animation-delay:${coverDropped?0:(i*0.4).toFixed(1)}s" aria-label="${esc(x.name)}${x.role?', '+esc(x.role):''}${todayActive.has(x.id)?', 오늘 기록함':''}">${face(x,66)}</button>`).join('')}</div>${todayActive.size?'<div class="cf-legend"><i></i>오늘 기록을 남긴 사람</div>':''}`:''}
-    ${m.cover?`<div class="cover-photo"${canDel(m.coverBy)?' data-adj="1" title="눌러서 위치·크기 조정" style="cursor:pointer"':''}><img src="${esc(mediaUrl(m.cover))}" alt=""></div>`:''}
+    ${cm.cover?`<div class="cover-photo"${cm.mineCover||canDel(cm.coverBy)?' data-adj="1" title="눌러서 위치·크기 조정" style="cursor:pointer"':''}><img src="${esc(mediaUrl(cm.cover))}" alt=""></div>`:''}
+    ${myId?`<div class="row" style="justify-content:center;margin:10px 0 0"><button class="btn quiet sm" id="myCv">${cm.mine?'내 표지 고치기':'내 표지 꾸미기'}</button>${cm.mine?'<span class="small faint" style="align-self:center">내 화면과 내 책에만 보여요</span>':''}</div>`:''}
     <div class="ticket">
       <div class="main"><div class="tk-grid">
         <div><div class="tk-k">여행지</div><div class="tk-v">${esc(m.place||'미정')}</div></div>
@@ -1094,7 +1122,8 @@ function rCover(v){
   bindA2hs();
   bindAuto(v);
   if($('#fC'))$('#fC').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const b=await shrink(f,2400,.88);coverCrop(b,null,true)}catch(err){toast('사진을 열지 못했어요: '+err.message)}};
-  const adjustCover=async()=>{const mm=meta();try{toast('사진 여는 중…',4000);const b=await BE.getBlob(mm.coverOrig||mm.cover);coverCrop(b,mm.coverOrig?mm.coverCrop:null,false)}catch(err){toast('사진을 열지 못했어요: '+err.message)}};
+  const mcb=$('#myCv',v);if(mcb)mcb.onclick=editMyCover;
+  const adjustCover=async()=>{if(coverMeta().mineCover){const c=myCover();try{const b=await BE.getBlob(c.coverOrig||c.cover);coverCrop(b,c.coverOrig?c.coverCrop:null,false,'mine')}catch(err){toast('사진을 열지 못했어요: '+err.message)}return}const mm=meta();try{toast('사진 여는 중…',4000);const b=await BE.getBlob(mm.coverOrig||mm.cover);coverCrop(b,mm.coverOrig?mm.coverCrop:null,false)}catch(err){toast('사진을 열지 못했어요: '+err.message)}};
   const cadj=$('#fCadj');if(cadj)cadj.onclick=adjustCover;
   const cph=$('.cover-photo[data-adj]',v);if(cph)cph.onclick=adjustCover;
   const cx=$('#fCx');if(cx)cx.onclick=()=>patch('trip','meta',{cover:null,coverOrig:null,coverCrop:null});
@@ -1420,6 +1449,7 @@ function rMap(v){
   v.innerHTML=chapHead('map','머문 곳에서 버튼을 눌러 위치를 남겨 주세요. 같은 날 기록한 곳은 시간 순서대로 이어져서, 그날의 경로가 됩니다.')+`
     <button class="btn recbtn" id="recBtn"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-4px;margin-right:6px"><path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.5"/></svg>현재 위치 기록</button>
     <p class="small muted" id="recMsg" style="margin:8px 2px 0;min-height:1.4em"></p>
+    ${distBlock(L,mapDay)}
     <div class="dchips"><button data-md="all" class="${mapDay==='all'?'on':''}">전체 ${L.length}</button>${ds.map(d=>`<button data-md="${d.i}" class="${String(mapDay)===String(d.i)?'on':''}" ${has(d.i)?'':'style="opacity:.5"'}>${d.i+1}일째 ${d.md}</button>`).join('')}${has('x')?`<button data-md="x" class="${mapDay==='x'?'on':''}">여행 날짜 밖</button>`:''}</div>
     <div class="mapbox" id="mapBox" aria-label="위치기록 지도"></div>
     <div style="margin-top:14px">${shown.length?groupLocs(shown).map(([k,arr])=>`<div class="day-h"><b>${k==='x'?'여행 날짜 밖':(Number(k)+1)+'일째'}</b><span>${k!=='x'&&ds[k]?`${ds[k].md} ${ds[k].wd}요일, `:''}${arr.length}곳</span></div>
@@ -1429,6 +1459,14 @@ function rMap(v){
   $$('[data-lx]',v).forEach(b=>b.onclick=()=>ask('이 위치기록을 지울까요?','지우기',()=>remove('loc',b.dataset.lx)));
   $('#recBtn').onclick=recordHere;
 }
+/* 이동 거리: 기록한 곳 사이 직선 거리 합 (시간 순) */
+function hav(a,b){const R=6371,t=x=>x*Math.PI/180;const dl=t(b.lat-a.lat),dn=t(b.lng-a.lng);const h=Math.sin(dl/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(h)))}
+function pathKm(arr){let k=0;for(let i=1;i<arr.length;i++)k+=hav(arr[i-1],arr[i]);return k}
+const kmTxt=k=>{const mi=k*0.621371;const f=v=>v>=100?Math.round(v).toLocaleString('en-US'):v.toFixed(1);return `${f(mi)} mi <span class="faint">(${f(k)} km)</span>`};
+function distBlock(L,sel){if(L.length<2)return '';const g=groupLocs(L).filter(([k])=>k!=='x');const tot=pathKm(L);
+  return `<div class="dist"><div class="dist-t"><span>여행 전체 이동 거리</span><b>${kmTxt(tot)}</b></div>
+    <div class="dist-d">${g.map(([k,arr])=>`<span class="${String(sel)===String(k)?'on':''}"><i>${Number(k)+1}일째</i>${arr.length>1?kmTxt(pathKm(arr)):'—'}</span>`).join('')}</div>
+    <p class="small faint" style="margin:6px 0 0">기록한 곳끼리 잇는 직선 거리라 실제 이동보다 짧아요.</p></div>`}
 function groupLocs(arr){const g={};arr.forEach(l=>(g[l.day??'x']=g[l.day??'x']||[]).push(l));return Object.entries(g).sort((a,b)=>(a[0]==='x')-(b[0]==='x')||a[0]-b[0])}
 function recordHere(){
   const msg=$('#recMsg'),btn=$('#recBtn');
@@ -1455,7 +1493,7 @@ function recordHere(){
 }
 /* 책용 지도 그림: 타일을 캔버스에 그려 이미지로. 실패하면 배경 없이 점과 선만 */
 function loadTile(url){return new Promise(res=>{const i=new Image();i.crossOrigin='anonymous';const t=setTimeout(()=>res(null),5000);i.onload=()=>{clearTimeout(t);res(i)};i.onerror=()=>{clearTimeout(t);res(null)};i.src=url})}
-async function staticMap(pts,W=720,H=420){
+async function staticMap(pts,W=720,H=420,byDay=false){
   const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
   const st=fitZoom(pts,W,H,60);const z=st.z,n=Math.pow(2,z),ox=st.cx-W/2,oy=st.cy-H/2;
   x.fillStyle='#E3E8F0';x.fillRect(0,0,W,H);
@@ -1465,7 +1503,7 @@ async function staticMap(pts,W=720,H=420){
   const P=p=>[lon2x(p.lng,z)-ox,lat2y(p.lat,z)-oy];
   if(pts.length>1){x.strokeStyle='#2340E0';x.lineWidth=4;x.lineCap='round';x.lineJoin='round';x.setLineDash([2,9]);x.beginPath();pts.forEach((p,i)=>{const [a,b]=P(p);i?x.lineTo(a,b):x.moveTo(a,b)});x.stroke();x.setLineDash([])}
   pts.forEach((p,i)=>{const [a,b]=P(p);x.beginPath();x.arc(a,b,9,0,7);x.fillStyle=mcol(member(p.author));x.fill();x.lineWidth=3;x.strokeStyle='#fff';x.stroke();
-    x.font='700 12px sans-serif';x.fillStyle='#fff';x.textAlign='center';x.textBaseline='middle';x.fillText(String(i+1),a,b+.5)});
+    x.font='700 12px sans-serif';x.fillStyle='#fff';x.textAlign='center';x.textBaseline='middle';if(!byDay||i===0||p.day!==pts[i-1].day)x.fillText(byDay?String((p.day??-1)+1||'·'):String(i+1),a,b+.5)});
   if(tiles&&imgs.some(Boolean)){x.font='11px sans-serif';const t='© OpenStreetMap contributors';const tw=x.measureText(t).width;x.fillStyle='rgba(255,255,255,.85)';x.fillRect(W-tw-12,H-18,tw+12,18);x.fillStyle='#4E5A75';x.textAlign='right';x.textBaseline='middle';x.fillText(t,W-6,H-9)}
   try{return c.toDataURL('image/jpeg',.85)}catch(e){return ''}
 }
@@ -1753,8 +1791,9 @@ function rShare(v){
 
 /* ---- 책 만들기 ---- */
 function rBook(v){
-  const ph=photos();
+  const ph=photos();const LL=locs();
   v.innerHTML=`<header class="chap-head plain"><h2>책 만들기</h2><p>지금까지 쓴 모든 것을 사진까지 담은 HTML 파일 한 권으로 묶습니다. 인터넷 없이 열리고, 인쇄하면 PDF로 저장할 수 있어요.</p></header>
+    ${LL.length?`<div class="block tripmap"><h3>여행 지도</h3><p class="small muted" style="margin:-4px 0 10px">위치기록 ${LL.length}곳을 이은 여행 전체 경로예요. 책에는 표지 바로 다음 장에 들어가요.</p><div class="mapbox" id="bMap" aria-label="여행 전체 지도"></div>${distBlock(LL)}</div>`:''}
     <ol class="steps">
       <li><b>미리 보기</b><p class="muted">표지부터 정산까지 책의 모양을 확인합니다.</p><div class="sp"></div><button class="btn line" id="bPv">미리 보기</button></li>
       <li><b>내려받기</b><p class="muted">사진 ${ph.length}장이 파일 안에 들어갑니다. 참가자 모두 각자 받아 두세요.</p><div class="sp"></div><button class="btn" id="bDl">책 파일 받기</button><div class="bar" id="bBar" style="display:none"><i></i></div><p class="small muted" id="bMsg"></p></li>
@@ -1765,8 +1804,9 @@ function rBook(v){
         ${BE.kind==='local'?'<button class="btn danger" id="bWipeL">이 기기의 기록 지우기</button>':isOwner?'<button class="btn danger" id="bWipe">온라인 기록 모두 지우기</button>':'<p class="small faint">관리자 기기에서만 할 수 있어요.</p>'}</li>
     </ol>`;
   const prog=(p,m)=>{const b=$('#bBar');b.style.display='';b.firstChild.style.width=Math.round(p*100)+'%';$('#bMsg').textContent=m||''};
+  if($('#bMap',v))mountMap($('#bMap',v),LL);
   $('#bPv').onclick=async()=>{const html=await buildBook({embed:false});openSheet(`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h2>미리 보기</h2><button class="btn quiet sm" id="pvX">닫기</button></div><iframe id="pvF" title="책 미리 보기" style="width:100%;height:74vh;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>`,true);$('#pvX').onclick=closeSheet;$('#pvF').srcdoc=html};
-  $('#bDl').onclick=async()=>{$('#bDl').disabled=true;try{const html=await buildBook({embed:true,onp:prog});download(new Blob([html],{type:'text/html'}),(meta().title||'여행모아').replace(/[\\/:*?"<>|]/g,'_')+'.html');prog(1,'받았어요. 다운로드 폴더를 확인해 주세요.');
+  $('#bDl').onclick=async()=>{$('#bDl').disabled=true;try{const html=await buildBook({embed:true,onp:prog});download(new Blob([html],{type:'text/html'}),(coverMeta().title||'여행모아').replace(/[\\/:*?"<>|]/g,'_')+'.html');prog(1,'받았어요. 다운로드 폴더를 확인해 주세요.');
     if(myId)put('got',myId,{at:Date.now()},{silent:true})}catch(e){console.error(e);prog(0,'만들지 못했어요: '+e.message)}finally{$('#bDl').disabled=false}};
   const w=$('#bWipe');if(w)w.onclick=wipeRemote;
   const wl=$('#bWipeL');if(wl)wl.onclick=()=>ask('이 기기에 저장된 체험 기록을 모두 지울까요?','모두 지우기',async()=>{await LocalBackend.wipe();rows.clear();LS.del('tb.cfg');LS.del('tb.me.local');cfg=null;location.hash='';$('#root').innerHTML='';render()});
@@ -1797,7 +1837,7 @@ function wipeRemote(){
    --------------------------------------------------------------- */
 const blobToURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
 async function buildBook({embed=true,onp=()=>{}}={}){
-  const m=meta(),ms=members(),ds=days(),ph=photos();
+  const m=coverMeta(),ms=members(),ds=days(),ph=photos();
   const need=new Set();if(m.cover)need.add(m.cover);ms.forEach(x=>x.avatar&&need.add(x.avatar));ph.forEach(p=>need.add(p.path));
   const src={};let n=0;
   for(const p of need){n++;onp(.9*n/need.size,`사진 담는 중 ${n}/${need.size}`);src[p]=embed?await blobToURL(await BE.getBlob(p)).catch(()=>''):mediaUrl(p)}
@@ -1815,6 +1855,7 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   b+=`<section class="cover">${m.place?`<p class="place">${esc(m.place)}</p>`:''}<h1>${esc(m.title||'우리 여행')}</h1>${m.sub?`<p class="sub">${esc(m.sub)}</p>`:''}
     <div class="faces">${ms.map(x=>F(x,72)).join('')}</div>${m.cover&&src[m.cover]?`<div class="cph"><img src="${src[m.cover]}" alt=""></div>`:''}
     <div class="tk"><div class="tm"><div><small>여행지</small><b>${esc(m.place||'')}</b></div><div><small>기간</small><b>${esc(period)}</b></div><div><small>함께한 사람</small><b>${ms.length}명</b></div></div><div class="ts"><b>${ds.length}일</b></div></div></section>`;
+  b+='<!--TRIPMAP-->';
   b+=`<section>${chap(1,'사람들')}<div class="people">${ms.map(x=>`<div class="pp">${F(x,92)}<div><h3 style="color:${mcol(x)}">${esc(x.name)}</h3><p class="rl">${esc(x.role||'')}</p>${x.hope?`<p>${esc(x.hope)}</p>`:''}</div></div>`).join('')}</div></section>`;
   b+=`<section>${chap(2,'준비')}${prep.map(p=>`<div class="tk sm"><div class="tm1"><small>${PREP[p.type]||''}</small><b>${esc(p.title||'')}</b><p>${[prepRange(p,true),(()=>{const sh=prepShare(p);return sh.mode==='me'?'개인':sh.ids.length+'명 나눔'})(),p.cost&&won(p.cost),p.payer&&nameOf(p.payer)+' 결제',p.code&&'예약번호 '+p.code].filter(Boolean).map(esc).join(', ')}</p>${p.memo?`<p>${esc(p.memo)}</p>`:''}</div><div class="ts">${p.status==='done'?'<span class="stamp">확정</span>':''}</div></div>`).join('')||'<p class="no">기록이 없어요</p>'}
     ${checks.length?`<h3 class="h3">챙긴 것</h3><ul class="cks">${checks.map(c=>`<li>${c.done?'☑':'☐'} ${esc(c.text)}${c.who?` <small>${nm(c.who)}</small>`:''}</li>`).join('')}</ul>`:''}</section>`;
@@ -1823,6 +1864,10 @@ async function buildBook({embed=true,onp=()=>{}}={}){
   const LL=locs(),lmap={},limg={};LL.forEach(l=>{if(l.day!=null)(lmap[l.day]=lmap[l.day]||[]).push(l)});
   let mi=0;const mk=Object.keys(lmap);
   for(const d of mk){mi++;onp(.92+.06*mi/mk.length,`지도 그리는 중 ${mi}/${mk.length}`);limg[d]=await staticMap(lmap[d])}
+  if(LL.length){const im=await staticMap(LL,960,640,true);const g=groupLocs(LL).filter(([k])=>k!=='x');const km=pathKm(LL);const mi_=x=>(x*0.621371).toFixed(1);
+    b=b.replace('<!--TRIPMAP-->',`<section class="tripmap"><h2 class="tmh">여행 지도</h2><p class="tms">${esc(m.place||'')}${m.place?', ':''}위치기록 ${LL.length}곳, 전체 이동 거리 약 ${mi_(km)} mi (${km.toFixed(1)} km)</p>${im?`<img src="${im}" alt="여행 전체 경로">`:''}
+      <ul class="tmd">${g.map(([k,arr])=>`<li><b>${Number(k)+1}일째</b> ${ds[k]?ds[k].md:''} · ${arr.length}곳${arr.length>1?` · ${mi_(pathKm(arr))} mi`:''}<br><small>${arr.map(l=>esc(l.name||'이름 없는 곳')).join(' → ')}</small></li>`).join('')}</ul>
+      <p class="tmn">기록한 곳끼리 잇는 직선 거리예요. 지도 위 숫자는 며칠째인지 나타내요.</p></section>`)}else b=b.replace('<!--TRIPMAP-->','');
   const routeBlock=d=>{const arr=lmap[d];if(!arr)return'';return `<div class="route">${limg[d]?`<img src="${limg[d]}" alt="${Number(d)+1}일째 경로">`:''}<ol>${arr.map(l=>`<li><b>${hhmm(l.at)}</b> ${esc(l.name||'이름 없는 곳')} <small>${nm(l.author)}</small></li>`).join('')}</ol></div>`};
   b+=`<section>${chap(4,'여행일기')}${Object.keys(lg).sort((a,c)=>a-c).map(d=>dh(Number(d))+lg[d].map(l=>{const a=member(l.author);const ps=ph.filter(p=>p.log===l.id);return `<article class="lg">${F(a,40)}<div><p class="by" style="color:${mcol(a)}">${esc(a?.name||'')}${wxInline(l.weather)}</p>${l.text?`<p class="tx">${esc(l.text)}</p>`:''}${ps.length?`<div class="grid g${Math.min(ps.length,3)}">${ps.map(fig).join('')}</div>`:''}</div></article>`}).join('')).join('')||'<p class="no">기록이 없어요</p>'}</section>`;
   const ab={};ph.forEach(p=>(ab[p.day??'x']=ab[p.day??'x']||[]).push(p));
@@ -1863,11 +1908,12 @@ figure{margin:0;break-inside:avoid}figure img{width:100%;aspect-ratio:4/5;object
 .rf{padding:22px 0;border-bottom:1px solid #E9EDF4;break-inside:avoid}.rh{display:flex;align-items:center;gap:12px;margin-bottom:6px}.rh h3{font-size:24px}.rf h4{font-size:14px;color:#2340E0;margin:16px 0 4px}.rf p{white-space:pre-wrap;font-size:16px;line-height:1.8}
 .tot b{font-size:40px;letter-spacing:-.04em}.tot span{color:#4E5A75}.xf{list-style:none;padding:0}.xf li{padding:8px 0;border-bottom:1px solid #E9EDF4}.xf b{background:linear-gradient(transparent 58%,#FFE45C 58%,#FFE45C 92%,transparent 92%)}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:8px 4px;border-bottom:1px solid #E9EDF4;text-align:left}th{font-size:13px;color:#8A93A8;font-weight:600}.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tripmap img{width:100%;border-radius:14px;display:block;margin:14px 0}.tmh{font-size:26px;margin:0}.tms{color:#4E5A75;margin:6px 0 0}.tmd{list-style:none;padding:0;margin:8px 0 0;font-size:14px}.tmd li{padding:8px 0;border-top:1px solid #E3E8F0}.tmd small{color:#4E5A75}.tmn{font-size:12px;color:#8A93A8;margin:10px 0 0}
 .route{margin:8px 0 18px;break-inside:avoid}.route img{width:100%;border-radius:14px;display:block}.route ol{columns:2;font-size:14px;padding-left:22px;margin:10px 0 0;color:#4E5A75}.route ol b{color:#14213D;font-variant-numeric:tabular-nums}.route small{color:#8A93A8}
 .wxi{display:inline-flex;align-items:center;gap:3px;color:#4E5A75;font-weight:500;font-size:13px;margin-left:6px;vertical-align:-3px}
 .no{color:#8A93A8}.colo{margin-top:48px;text-align:center;color:#8A93A8;font-size:14px}
 .pbtn{position:fixed;right:16px;bottom:16px;background:#2340E0;color:#fff;border:0;border-radius:12px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}
-@media print{body{background:#fff;padding:0}section{max-width:none;margin:0;border-radius:0;padding:24px 8px;break-before:page}section.cover{break-before:auto;break-inside:avoid}.cph{margin-bottom:16px}img{max-width:100%}.route img{max-height:60vh;object-fit:contain}.pbtn{display:none}}
+@media print{body{background:#fff;padding:0}section{max-width:none;margin:0;border-radius:0;padding:24px 8px;break-before:page}section.cover{break-before:auto;break-inside:avoid}section.tripmap{break-before:page;break-inside:avoid}section.tripmap img{max-height:55vh;object-fit:contain}.cph{margin-bottom:16px}img{max-width:100%}.route img{max-height:60vh;object-fit:contain}.pbtn{display:none}}
 </style></head><body>${b}<button class="pbtn" onclick="window.print()">인쇄 / PDF로 저장</button></body></html>`;
 }
 
