@@ -146,11 +146,20 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 /* stamp */
 .stamp{display:inline-grid;place-items:center;width:62px;height:62px;border-radius:50%;border:2.5px solid currentColor;color:var(--cobalt);font-weight:800;font-size:14px;transform:rotate(-12deg);box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 4.5px currentColor}
 .stamp.off{color:var(--ink3)}
+.tl li.ed{position:relative}.tl li.ed>div:nth-child(3){cursor:pointer;padding-right:30px}
+.pl-open{position:absolute;right:-4px;top:0;width:36px;height:40px;display:grid;place-items:center;font-size:26px;line-height:1;color:var(--ink3)}
 .stamp.two{font-size:12.5px;line-height:1.12;text-align:center}
 .stamp.per{color:var(--red);border-radius:12px}
 .ticket.per{border-color:var(--line);box-shadow:inset 6px 0 0 var(--red)}.ticket.per .main{padding-left:24px}.ticket.per .stub::before,.ticket.per .stub::after{border-color:var(--line)}
 .tk-sub{font-size:11.5px;color:var(--ink2);margin-top:9px;line-height:1.35;text-align:center}.tk-sub b{color:var(--ink)}
 .tk-meta b{color:var(--ink);font-weight:800}
+.gotl{background:var(--bg);border-radius:12px;padding:10px 12px;margin-top:10px}
+.gotc{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 9px 3px 3px;border-radius:999px;background:#fff;color:var(--ink3);border:1px solid var(--line)}.gotc.on{color:var(--ink);border-color:var(--cobalt)}
+.pbal{list-style:none;margin:6px 0 0;padding:0}
+.pbal li{padding:12px 0;border-bottom:1px solid var(--line2)}.pbal li:last-child{border-bottom:0}
+.pb-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.pb-h b{font-size:15px}.pb-h .num{margin-left:auto;font-weight:800;font-size:15px;white-space:nowrap}
+.pb-h .pos{color:var(--green,#0F7A5A)}.pb-h .neg{color:var(--red)}
+.pb-d{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 0 40px;font-size:13px;color:var(--ink2)}.pb-d b{color:var(--ink);font-weight:700;white-space:nowrap}
 .fund{background:var(--bg);border-radius:12px;padding:4px 14px;margin-top:14px}
 .fund div{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line2)}.fund div:last-child{border-bottom:0}
 .fund span{font-size:14px;color:var(--ink2)}.fund b{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -382,7 +391,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.17-일정고치기';
+const APP_VERSION='11.20-점검';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -631,7 +640,7 @@ async function savePhoto(blob){
   const id=uid(12);const path=`${cfg.mode==='remote'?cfg.folder:'local'}/${id}.jpg`;
   await BE.putBlob(path,blob);
   /* 올린 사진 목록: 바꾸거나 다시 자른 사진도 마지막 「온라인 기록 지우기」 때 빠짐없이 지우려고 */
-  try{await put('blob',id,{path},{silent:true})}catch(e){console.warn(e)}
+  try{await put('blob',id,{path,size:blob.size||0},{silent:true})}catch(e){console.warn(e)}
   return{id,path};
 }
 async function addPhotos(files,extra){
@@ -1234,7 +1243,7 @@ function rPlan(v){
     <div class="dates" role="tablist">${ds.map(d=>`<button role="tab" data-d="${d.i}" class="${d.i===planDay?'on':''}" aria-selected="${d.i===planDay}"><span>${d.wd}</span><b>${d.date.getDate()}</b><span>${d.i+1}일째</span></button>`).join('')}</div>
     <input class="under" style="font-size:20px;font-weight:800;margin:10px 0 18px" id="thm" value="${esc(theme)}" placeholder="${dayName(planDay)}의 테마 (예: Highway 1 해안 드라이브)" aria-label="이날의 테마">
     <ol class="tl">${items.map(it=>{const {up,down}=votesFor(it.id);const mv=up.includes(myId)?1:down.includes(myId)?-1:0;const canDel=isOwner||(it.author&&it.author===myId);
-      return `<li class="${anyOk&&!it.confirmed?'cand':''}"><div class="tm">${esc(it.time||'')}</div><div><div class="dot ${it.confirmed?'ok':''}"></div></div><div>
+      return `<li class="${anyOk&&!it.confirmed?'cand':''}${canDel?' ed':''}"><div class="tm">${esc(it.time||'')}</div><div><div class="dot ${it.confirmed?'ok':''}"></div></div><div>
       <div class="row" style="gap:8px;align-items:center"><div class="pl">${esc(it.place)}</div>${it.confirmed?'<span class="okb">확정</span>':''}</div>${it.note?`<div class="nt">${esc(it.note)}</div>`:''}
       ${it.author?`<div class="small faint">${esc(nameOf(it.author))} 님이 올림</div>`:''}
       <div class="vote">
@@ -1242,8 +1251,7 @@ function rPlan(v){
         <button class="like no ${mv===-1?'on':''}" data-down="${it.id}" aria-pressed="${mv===-1}">아쉬워요 ${down.length||''}</button>
       </div>
       ${up.length||down.length?`<div class="vwho">${up.length?`<span class="faces">${up.map(id=>face(member(id),22)).join('')}</span>`:''}${down.length?`<span class="faint small">아쉬워요:</span><span class="faces">${down.map(id=>face(member(id),22)).join('')}</span>`:''}</div>`:''}
-      ${isOwner||canDel?`<div class="row" style="gap:6px;margin-top:8px">${isOwner?`<button class="btn ${it.confirmed?'quiet':'line'} sm" data-ok="${it.id}">${it.confirmed?'확정 취소':'확정'}</button>`:''}${canDel?`<button class="btn quiet sm" data-pe="${it.id}">고치기</button><button class="btn quiet sm" data-px="${it.id}">지우기</button>`:''}</div>`:''}
-      </div></li>`}).join('')}</ol>
+      </div>${canDel?`<button type="button" class="pl-open" data-pe="${it.id}" aria-label="${esc(it.place)} 고치기"><span aria-hidden="true">›</span></button>`:''}</li>`}).join('')}</ol>
     ${items.length?(anyOk?'<p class="small faint" style="margin:-6px 0 6px">흐리게 보이는 일정은 확정되지 않은 후보예요. 책에는 확정된 일정만 들어갑니다.</p>':''):'<div class="empty"><b>이날은 아직 비어 있어요</b>아래에서 시간과 장소를 넣어 주세요. 같은 시간에 후보를 여러 개 올려도 됩니다.</div>'}
     <div class="block"><h3>일정 추가</h3><div class="row"><label class="tbox"><input class="in" type="time" id="nTm" aria-label="시간"><span class="tph">시간</span></label><input class="in grow" id="nPl" placeholder="장소나 할 일 (예: Muir Woods)" aria-label="장소"></div><input class="in" id="nNt" placeholder="메모 (선택)" style="margin-top:8px" aria-label="메모"><div class="sp"></div><button class="btn" id="nAdd">일정 추가</button></div>`;
   $$('[data-d]',v).forEach(b=>b.onclick=()=>{planDay=Number(b.dataset.d);render()});
@@ -1253,9 +1261,9 @@ function rPlan(v){
   const vote=(id,val)=>{if(!myId){toast('먼저 참가자 장에서 나를 등록해 주세요');return}const k=id+'__'+myId;const cur=one('vote',k);const now=cur?voteOf(cur):0;put('vote',k,{item:id,member:myId,v:now===val?0:val})};
   $$('[data-up]',v).forEach(b=>b.onclick=()=>vote(b.dataset.up,1));
   $$('[data-down]',v).forEach(b=>b.onclick=()=>vote(b.dataset.down,-1));
-  $$('[data-ok]',v).forEach(b=>b.onclick=()=>{const it=one('plan',b.dataset.ok);patch('plan',b.dataset.ok,{confirmed:!it.confirmed});toast(it.confirmed?'확정을 취소했어요':`${it.place} 확정!`)});
   $$('[data-pe]',v).forEach(b=>b.onclick=()=>editPlan(b.dataset.pe));
-  $$('[data-px]',v).forEach(b=>b.onclick=()=>{const it=one('plan',b.dataset.px);ask(`「${it.place}」을(를) 일정에서 지울까요?`,'지우기',()=>remove('plan',b.dataset.px))});
+  /* 고칠 수 있는 일정은 글자 부분을 눌러도 창이 열림 (좋아요/아쉬워요 버튼은 제외) */
+  $$('.tl li.ed',v).forEach(li=>{const d=li.querySelector('[data-pe]');li.querySelector('.pl')?.parentElement?.parentElement?.addEventListener('click',e=>{if(e.target.closest('button'))return;editPlan(d.dataset.pe)})});
 }
 
 function editPlan(id){
@@ -1266,7 +1274,10 @@ function editPlan(id){
     <label class="lab" for="ePl">장소나 할 일</label><input class="in" id="ePl" value="${esc(it.place||'')}">
     <label class="lab" for="ePn">메모</label><input class="in" id="ePn" value="${esc(it.note||'')}" placeholder="선택">
     ${(it.confirmed||all('vote').some(x=>x.item===id&&voteOf(x)))?'<p class="small faint" style="margin-top:10px">고쳐도 좋아요/아쉬워요와 확정은 그대로 남아요.</p>':''}
-    <div class="sp"></div><div class="row"><button class="btn grow" id="ePs">저장</button><button class="btn quiet" id="ePc">취소</button></div>`);
+    <div class="sp"></div><div class="row"><button class="btn grow" id="ePs">저장</button><button class="btn quiet" id="ePc">취소</button></div>
+    <div class="row" style="margin-top:14px;gap:8px;border-top:1px solid var(--line);padding-top:14px">${isOwner?`<button class="btn line sm grow" id="ePok">${it.confirmed?'확정 취소':'확정하기'}</button>`:''}<button class="btn quiet sm" id="ePx" style="color:var(--red)">이 일정 지우기</button></div>`);
+  const ok=$('#ePok');if(ok)ok.onclick=()=>{closeSheet();patch('plan',id,{confirmed:!it.confirmed});toast(it.confirmed?'확정을 취소했어요':`${it.place} 확정!`)};
+  $('#ePx').onclick=()=>{closeSheet();ask(`「${it.place}」을(를) 일정에서 지울까요?`,'지우기',()=>remove('plan',id))};
   {const t=$('#ePt');const f=()=>t.classList.toggle('has',!!t.value);['input','change','blur'].forEach(e=>t.addEventListener(e,f));f()}
   $('#ePc').onclick=closeSheet;
   $('#ePs').onclick=()=>{const d={day:Number($('#ePd').value),time:$('#ePt').value,place:$('#ePl').value.trim(),note:$('#ePn').value.trim()};
@@ -1389,7 +1400,7 @@ function rMap(v){
   const shown=mapDay==='all'?L:L.filter(l=>String(l.day??'x')===String(mapDay));
   const has=k=>L.some(l=>String(l.day??'x')===String(k));
   v.innerHTML=chapHead('map','머문 곳에서 버튼을 눌러 위치를 남겨 주세요. 같은 날 기록한 곳은 시간 순서대로 이어져서, 그날의 경로가 됩니다.')+`
-    <button class="btn recbtn" id="recBtn">📍 현재 위치 기록</button>
+    <button class="btn recbtn" id="recBtn"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-4px;margin-right:6px"><path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.5"/></svg>현재 위치 기록</button>
     <p class="small muted" id="recMsg" style="margin:8px 2px 0;min-height:1.4em"></p>
     <div class="dchips"><button data-md="all" class="${mapDay==='all'?'on':''}">전체 ${L.length}</button>${ds.map(d=>`<button data-md="${d.i}" class="${String(mapDay)===String(d.i)?'on':''}" ${has(d.i)?'':'style="opacity:.5"'}>${d.i+1}일째 ${d.md}</button>`).join('')}${has('x')?`<button data-md="x" class="${mapDay==='x'?'on':''}">여행 날짜 밖</button>`:''}</div>
     <div class="mapbox" id="mapBox" aria-label="위치기록 지도"></div>
@@ -1538,7 +1549,7 @@ function rRefl(v){
 /* ---- 정산 ---- */
 function expenseRows(){
   const ids=members().map(m=>m.id);
-  const fromPrep=all('prep').filter(p=>prepShare(p).mode!=='me'&&p.cost&&p.payer).map(p=>({id:'p'+p.id,prep:true,day:null,payer:p.payer,amount:Number(p.cost),memo:p.title||PREP[p.type],split:prepShare(p).ids}));
+  const fromPrep=all('prep').filter(p=>p.status==='done'&&prepShare(p).mode!=='me'&&p.cost&&p.payer).map(p=>({id:'p'+p.id,prep:true,day:null,payer:p.payer,amount:Number(p.cost),memo:p.title||PREP[p.type],split:prepShare(p).ids}));
   const ex=all('expense').map(e=>({...e,amount:Number(e.amount)||0,split:(e.split||[]).filter(s=>ids.includes(s))})).map(e=>({...e,split:e.payer===POOL||!e.split.length?ids:e.split}));
   return [...fromPrep,...ex].sort((a,b)=>((a.day??-1)-(b.day??-1))||((a.created||0)-(b.created||0)));
 }
@@ -1580,8 +1591,10 @@ function rMoney(v){
       <h3 style="margin-top:20px">보낼 돈</h3>
       <ul class="xfer">${tr.map(t=>`<li><span class="pair">${face(member(t.from),30)}${face(member(t.to),30)}</span><span class="who2">${esc(nameOf(t.from))}<span>→</span>${esc(nameOf(t.to))}</span><b class="hl num">${won(t.amt)}</b></li>`).join('')||'<li class="muted">아직 보낼 돈이 없어요</li>'}</ul>
       <h3 style="margin-top:22px">사람별</h3>
-      <table><thead><tr><th>이름</th><th class="num">낸 돈</th><th class="num">내 몫</th><th class="num">차이</th></tr></thead><tbody>
-      ${ms.map(m=>{const paid=rows_.filter(e=>e.payer===m.id).reduce((s,e)=>s+e.amount,0);const b=bal[m.id]||0;return `<tr><td>${esc(m.name)}</td><td class="num">${won(paid)}</td><td class="num">${won(paid-b)}</td><td class="num ${b>=0?'pos':'neg'}">${b>=0?'+':''}${won(b)}</td></tr>`}).join('')}</tbody></table></div>`;
+      <ul class="pbal">${ms.map(m=>{const paid=rows_.filter(e=>e.payer===m.id).reduce((s,e)=>s+e.amount,0);const b=bal[m.id]||0;const z=Math.abs(b)<.005;
+        return `<li><div class="pb-h">${face(m,30)}<b>${esc(m.name)}</b><span class="num ${z?'':b>0?'pos':'neg'}">${z?'정산 끝':b>0?'받을 돈 '+won(b):'보낼 돈 '+won(-b)}</span></div>
+        <div class="pb-d"><span>낸 돈 <b class="num">${won(paid)}</b></span><span>내 몫 <b class="num">${won(paid-b)}</b></span></div></li>`}).join('')}</ul>
+      ${fundInfo().on?'<p class="small faint" style="margin-top:8px">공금으로 낸 돈은 위 공동구좌에서 따로 계산해서 여기에는 들어가지 않아요.</p>':''}</div>`;
   const xpUi=()=>{const pool=$('#xP').value===POOL;$$('.xS',v).forEach(c=>{if(pool)c.checked=true;c.disabled=pool})};$('#xP').addEventListener('change',xpUi);
   $$('[data-fo]',v).forEach(b=>b.onclick=()=>{const on=b.dataset.fo==='1';patch('trip','meta',{fund:{...(meta().fund||{}),on}})});
   const fa=$('#fAmt',v);if(fa)fa.addEventListener('change',()=>patch('trip','meta',{fund:{...(meta().fund||{}),on:true,amount:Number(fa.value)||0}}));
@@ -1643,6 +1656,14 @@ function rShare(v){
   v.innerHTML=`<header class="chap-head plain"><h2>함께 쓰기</h2><p>초대 링크와 입장 비밀번호를 참가자에게 알려 주세요. 링크를 연 다음 비밀번호를 넣고, 자기 이름을 고르면 됩니다. 가입은 필요 없어요.</p></header>
     <div class="block"><h3>초대 링크</h3><p class="small" style="word-break:break-all;color:var(--ink2);background:var(--bg);padding:12px;border-radius:10px">${esc(link)}</p><div class="sp"></div><button class="btn" id="cpL">링크 복사</button></div>
     <div class="block"><h3>입장 비밀번호</h3><p class="muted">링크만으로는 들어올 수 없어요. 비밀번호가 맞아야 서버가 글과 사진을 열어 줍니다. 비밀번호는 관리자가 정한 그대로이고, 이 앱 어디에도 다시 보여 주지 않아요.</p></div>
+    ${(()=>{/* 사진 공간: 올릴 때 적어 둔 크기의 합. 예전 사진은 크기를 몰라서 평균으로 어림 */
+      const bl=all('blob'),known=new Set(bl.map(x=>x.path));let sum=bl.reduce((t,x)=>t+(x.size||0),0);const sized=bl.filter(x=>x.size).length;const avg=sized?sum/sized:400e3;
+      const used=new Set();rows.forEach(r=>{if(r.del)return;const d=r.data||{};['path','avatar','cover','coverOrig'].forEach(k=>{if(d[k])used.add(d[k])})});
+      let guess=0;used.forEach(x=>{if(!known.has(x))guess++});sum+=guess*avg;bl.forEach(x=>{if(!x.size)sum+=avg});
+      const mb=sum/1048576,pct=Math.min(100,mb/1024*100);
+      return `<div class="block"><h3>사진 저장 공간</h3><p class="muted">이 여행의 사진이 쓰는 공간이에요. Supabase 무료 프로젝트는 사진을 모두 합쳐 1GB까지 둘 수 있어요.</p>
+        <div class="bar" style="margin-top:10px"><i style="width:${pct.toFixed(1)}%;${pct>80?'background:var(--red)':''}"></i></div>
+        <p class="small" style="margin-top:6px"><b>약 ${mb<10?mb.toFixed(1):Math.round(mb)}MB</b> / 1,024MB (${pct<1?'1% 미만':Math.round(pct)+'%'})${guess||bl.some(x=>!x.size)?' · 예전 사진은 어림값이에요':''}</p></div>`})()}
     <div class="note">링크와 비밀번호를 둘 다 아는 사람만 들어올 수 있어요. 단톡방에 함께 올려도 되지만, 그 단톡방 밖으로는 나가지 않게 해 주세요.</div>
     <div class="note">Supabase 무료 프로젝트는 7일 동안 아무도 쓰지 않으면 잠시 멈춥니다. 그럴 땐 관리자가 Supabase 화면에서 Restore를 한 번 누르면 다시 열려요.</div>
     <div class="block"><h3>관리자</h3><p class="muted">이 기기는 관리자 기기입니다. 다른 기기에서도 내 이름 메뉴의 「관리자 되기」에 관리자 비밀번호를 넣으면 관리자가 돼요. 참가자에게는 이 「함께 쓰기」 메뉴가 보이지 않습니다.</p>
@@ -1659,12 +1680,16 @@ function rBook(v){
     <ol class="steps">
       <li><b>미리 보기</b><p class="muted">표지부터 정산까지 책의 모양을 확인합니다.</p><div class="sp"></div><button class="btn line" id="bPv">미리 보기</button></li>
       <li><b>내려받기</b><p class="muted">사진 ${ph.length}장이 파일 안에 들어갑니다. 참가자 모두 각자 받아 두세요.</p><div class="sp"></div><button class="btn" id="bDl">책 파일 받기</button><div class="bar" id="bBar" style="display:none"><i></i></div><p class="small muted" id="bMsg"></p></li>
-      <li><b>온라인 기록 지우기</b><p class="muted">모두 파일을 받은 뒤 관리자가 누릅니다. 글과 사진이 Supabase에서 완전히 지워지고 되살릴 수 없어요.</p><div class="sp"></div>
+      <li><b>온라인 기록 지우기</b><p class="muted">모두 파일을 받은 뒤 관리자가 누릅니다. 글과 사진이 Supabase에서 완전히 지워지고 되살릴 수 없어요.</p>
+        ${BE.kind!=='local'&&members().length?(()=>{const g=members().map(m=>[m,one('got',m.id)]);const n=g.filter(([,x])=>x).length;
+          return `<div class="gotl"><p class="small"><b>책 받은 사람 ${n}/${g.length}</b>${n<g.length?' · 모두 받은 뒤에 지우세요':' · 모두 받았어요'}</p><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${g.map(([m,x])=>`<span class="gotc ${x?'on':''}">${face(m,22)}${esc(m.name)} ${x?'받음':'아직'}</span>`).join('')}</div></div>`})():''}
+        <div class="sp"></div>
         ${BE.kind==='local'?'<button class="btn danger" id="bWipeL">이 기기의 기록 지우기</button>':isOwner?'<button class="btn danger" id="bWipe">온라인 기록 모두 지우기</button>':'<p class="small faint">관리자 기기에서만 할 수 있어요.</p>'}</li>
     </ol>`;
   const prog=(p,m)=>{const b=$('#bBar');b.style.display='';b.firstChild.style.width=Math.round(p*100)+'%';$('#bMsg').textContent=m||''};
   $('#bPv').onclick=async()=>{const html=await buildBook({embed:false});openSheet(`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h2>미리 보기</h2><button class="btn quiet sm" id="pvX">닫기</button></div><iframe id="pvF" title="책 미리 보기" style="width:100%;height:74vh;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>`,true);$('#pvX').onclick=closeSheet;$('#pvF').srcdoc=html};
-  $('#bDl').onclick=async()=>{$('#bDl').disabled=true;try{const html=await buildBook({embed:true,onp:prog});download(new Blob([html],{type:'text/html'}),(meta().title||'여행모아').replace(/[\\/:*?"<>|]/g,'_')+'.html');prog(1,'받았어요. 다운로드 폴더를 확인해 주세요.')}catch(e){console.error(e);prog(0,'만들지 못했어요: '+e.message)}finally{$('#bDl').disabled=false}};
+  $('#bDl').onclick=async()=>{$('#bDl').disabled=true;try{const html=await buildBook({embed:true,onp:prog});download(new Blob([html],{type:'text/html'}),(meta().title||'여행모아').replace(/[\\/:*?"<>|]/g,'_')+'.html');prog(1,'받았어요. 다운로드 폴더를 확인해 주세요.');
+    if(myId)put('got',myId,{at:Date.now()},{silent:true})}catch(e){console.error(e);prog(0,'만들지 못했어요: '+e.message)}finally{$('#bDl').disabled=false}};
   const w=$('#bWipe');if(w)w.onclick=wipeRemote;
   const wl=$('#bWipeL');if(wl)wl.onclick=()=>ask('이 기기에 저장된 체험 기록을 모두 지울까요?','모두 지우기',async()=>{await LocalBackend.wipe();rows.clear();LS.del('tb.cfg');LS.del('tb.me.local');cfg=null;location.hash='';$('#root').innerHTML='';render()});
 }
