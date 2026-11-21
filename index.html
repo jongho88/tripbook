@@ -92,6 +92,10 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:18px 0}
 .btn.block-w{width:100%}
 .link{color:var(--cobalt);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .in,.ta,.sel{width:100%;background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;outline:none;min-height:44px}
+/* 한 줄 입력칸은 모두 같은 높이. 아이폰은 비어 있는 시간·날짜 칸을 낮게 그려서 모양을 직접 지정 */
+input.in,select.sel{height:48px;box-sizing:border-box}
+input.in[type=time],input.in[type=date]{-webkit-appearance:none;appearance:none;line-height:24px}
+input.in::-webkit-date-and-time-value{text-align:left;min-height:24px;line-height:24px}
 .in:focus,.ta:focus,.sel:focus{border-color:var(--cobalt)}
 .ta{min-height:96px;resize:vertical;line-height:1.6}
 .lab{display:block;font-size:13px;font-weight:600;color:var(--ink2);margin:14px 0 6px}
@@ -416,7 +420,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-메뉴색';
+const APP_VERSION='11.20-시간칸';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
