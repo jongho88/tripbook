@@ -45,13 +45,21 @@ img{display:block;max-width:100%}
 .mast-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 18px 0}
 .mast-title{flex:1;min-width:0;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2)}
-.strip{max-width:760px;margin:0 auto;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding:6px 12px 0}
+.mast{transition:transform .22s ease}.mast-in{transition:opacity .18s}
+.mast.slim{transform:translateY(calc(-1 * var(--mh,52px)))}.mast.slim .mast-in{opacity:0}
+.stripw{position:relative;max-width:760px;margin:0 auto}
+.stripw::before,.stripw::after{content:"";position:absolute;top:0;bottom:0;width:28px;pointer-events:none;z-index:1;opacity:0;transition:opacity .15s}
+.stripw::before{left:0;background:linear-gradient(90deg,rgba(255,255,255,.97),rgba(255,255,255,0))}
+.stripw::after{right:0;background:linear-gradient(270deg,rgba(255,255,255,.97),rgba(255,255,255,0))}
+.stripw.fl::before,.stripw.fr::after{opacity:1}
+.strip{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding:8px 12px 9px;scroll-behavior:smooth}
 .strip::-webkit-scrollbar{display:none}
-.strip button{flex:none;padding:8px 10px 11px;font-size:14px;color:var(--ink2);position:relative;white-space:nowrap}
+.strip button{flex:none;padding:7px 12px;font-size:14px;color:var(--ink2);position:relative;white-space:nowrap;border-radius:999px;transition:background .15s,color .15s}
+.strip button:hover{background:var(--bg)}
 .strip button .n{color:var(--cobalt);font-weight:700;margin-right:4px;font-variant-numeric:tabular-nums}
-.strip button.on{color:var(--ink);font-weight:700}
+.strip button.on{color:var(--cobalt);font-weight:700;background:#E7EBFD}
 .strip button .ic{width:15px;height:15px;margin-right:5px;vertical-align:-2px;stroke:var(--cobalt);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.strip button.on::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:4px;border-radius:4px 4px 0 0;background:var(--cobalt)}
+
 
 /* ---------- page ---------- */
 .page{max-width:760px;margin:0 auto;padding:28px 18px 120px}
@@ -408,7 +416,7 @@ pre.code{background:var(--ink);color:#E6EAF5;border-radius:12px;padding:14px;fon
    · 공유 모드: 관리자의 Supabase 무료 프로젝트. 참가자는 초대 링크만 열면 됨(가입 없음)
    ===================================================================== */
 
-const APP_VERSION='11.20-여행지한줄';
+const APP_VERSION='11.20-메뉴다듬기';
 const COLORS=['#2340E0','#D93A3F','#12A17D','#EE8A12','#8A4FD8','#0E9FC2','#D6458E','#6F7D1F'];
 /* 날씨: 선 아이콘(24 격자). 예전 일기의 이모지 값도 읽어 들임 */
 const WX=[
@@ -981,7 +989,8 @@ function render(){
   const legacyOwner=BE.kind==='remote'&&!isOwner&&!!LS.get('tb.owner.'+cfg.trip);
   if(!myId&&!isOwner&&!legacyOwner&&BE.kind==='remote')return rPickMe();
   if(!$('#view')){
-    $('#root').innerHTML=`<div class="mast"><div class="mast-in"><div class="mast-title"></div><div class="who" id="who"></div></div><nav class="strip" id="strip" aria-label="장 목록"></nav></div><main class="page" id="view"></main>`;
+    if(!window.__slim){window.__slim=1;let lastY=0;addEventListener('scroll',()=>{const y=scrollY,m=document.querySelector('.mast');if(!m)return;const mi=m.querySelector('.mast-in');if(mi)m.style.setProperty('--mh',mi.offsetHeight+'px');if(y>80&&y>lastY+6)m.classList.add('slim');else if(y<lastY-6||y<40)m.classList.remove('slim');lastY=y},{passive:true})}
+    $('#root').innerHTML=`<div class="mast"><div class="mast-in"><div class="mast-title"></div><div class="who" id="who"></div></div><div class="stripw" id="stripw"><nav class="strip" id="strip" aria-label="장 목록"></nav></div></div><main class="page" id="view"></main>`;
   }
   $('.mast-title').textContent=meta().title||'여행모아';
   const me=member(myId);
@@ -992,7 +1001,10 @@ function render(){
   $('#strip').innerHTML=CHAPS.map(c=>`<button data-v="${c.k}" class="${c.k===view?'on':''}">${c.n?`<span class="n">${c.n}</span>`:''}${c.ic?NAVIC[c.ic]:''}${c.t}</button>`).join('')+(isOwner?`<button data-v="share" class="${view==='share'?'on':''}">${NAVIC.share}함께 쓰기</button>`:'');
   if(view==='share'&&!isOwner)view='cover';
   $$('#strip button').forEach(b=>b.onclick=()=>go(b.dataset.v));
-  const on=$('#strip .on');if(on)on.scrollIntoView({block:'nearest',inline:'nearest'});
+  /* 지금 장을 메뉴 가운데로, 양 끝 흐림은 더 있을 때만 */
+  const sp=$('#strip'),sw=$('#stripw');const edge=()=>{sw.classList.toggle('fl',sp.scrollLeft>4);sw.classList.toggle('fr',sp.scrollLeft+sp.clientWidth<sp.scrollWidth-4)};
+  const on=$('#strip .on');if(on){const x=on.offsetLeft-(sp.clientWidth-on.offsetWidth)/2;sp.style.scrollBehavior='auto';sp.scrollLeft=Math.max(0,x);sp.style.scrollBehavior=''}
+  sp.onscroll=edge;edge();
   const v=$('#view');
   ({cover:rCover,people:rPeople,prep:rPrep,plan:rPlan,log:rLog,map:rMap,album:rAlbum,refl:rRefl,money:rMoney,book:rBook,share:rShare}[view]||rCover)(v);
 }
